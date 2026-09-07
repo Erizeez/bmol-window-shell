@@ -359,6 +359,7 @@ dependencies = [
  "liquid-glass-scene",
  "liquid-glass-ui",
  "liquid-rs",
+ "macos-typography",
  "pollster",
  "raw-window-handle",
  "spring-rs",
@@ -1788,6 +1789,14 @@ dependencies = [
  "float_next_after",
  "lyon_path",
  "num-traits",
+]
+
+[[package]]
+name = "macos-typography"
+version = "0.1.0"
+source = "git+https://github.com/Erizeez/macos-fonts.git?tag=v0.1.0#0c040625e7bbf88760d4f21a53ab6aee44b59e4e"
+dependencies = [
+ "iced_core",
 ]
 
 [[package]]

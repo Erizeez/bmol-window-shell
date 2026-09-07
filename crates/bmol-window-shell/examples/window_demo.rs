@@ -12,7 +12,6 @@
 use bmol_window_shell::{
     ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics,
 };
-use iced::font::{self, Family, Font};
 use iced::widget::{
     button, column, container, mouse_area, row, scrollable, slider, space, text, toggler,
 };
@@ -34,46 +33,7 @@ use window_controls::{
 
 type AppElement<'a> = Element<'a, Message, Theme, Renderer>;
 
-/// Standard Apple Titlebar Font (SF Pro Text for Latin, PingFang SC for Chinese).
-///
-/// Under macOS, specifying family `"System Font"` (or `".SF NS"`) instructs the system
-/// text shaping engine to render Latin/ASCII using Apple's San Francisco (SF Pro Text) and
-/// seamlessly cascade Chinese glyphs to 苹方 (PingFang SC).
-///
-/// Weight is strictly set to `font::Weight::Normal` (400), eliminating the coarse,
-/// bloated "pseudo-bold" look of default fallbacks.
-#[cfg(target_os = "macos")]
-pub const APPLE_TITLEBAR_FONT: Font = Font {
-    family: Family::Name("System Font"),
-    weight: font::Weight::Normal,
-    stretch: font::Stretch::Normal,
-    style: font::Style::Normal,
-};
-
-#[cfg(not(target_os = "macos"))]
-pub const APPLE_TITLEBAR_FONT: Font = Font {
-    family: Family::Name("SFNS Text"),
-    weight: font::Weight::Normal,
-    stretch: font::Stretch::Normal,
-    style: font::Style::Normal,
-};
-
-/// Emphasized font for unified header navigation/section titles (Weight 500 Medium).
-#[cfg(target_os = "macos")]
-pub const APPLE_HEADER_FONT: Font = Font {
-    family: Family::Name("System Font"),
-    weight: font::Weight::Medium,
-    stretch: font::Stretch::Normal,
-    style: font::Style::Normal,
-};
-
-#[cfg(not(target_os = "macos"))]
-pub const APPLE_HEADER_FONT: Font = Font {
-    family: Family::Name("SFNS Text"),
-    weight: font::Weight::Medium,
-    stretch: font::Stretch::Normal,
-    style: font::Style::Normal,
-};
+pub use macos_typography::{APPLE_HEADER_FONT, APPLE_TITLEBAR_FONT};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LayoutSelection {
