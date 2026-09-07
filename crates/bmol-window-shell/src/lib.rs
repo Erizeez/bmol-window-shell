@@ -17,5 +17,5 @@ pub use platform::{
     BackdropError, BackdropFrame, BackdropFrameError, BackdropRequest, BackdropSize,
     BackdropSource, ChromeDrawPlan, ChromeLayoutMode, DesktopBackdropProvider, DisplayScale,
     Insets, Point, Rect, SidebarBackgroundConfig, SidebarBackgroundExtension, WindowChromeConfig,
-    WindowChromeMetrics, WindowConfig, WindowHitZone, traffic_lights,
+    WindowChromeMetrics, WindowConfig, WindowHitZone, traffic_lights, typography,
 };

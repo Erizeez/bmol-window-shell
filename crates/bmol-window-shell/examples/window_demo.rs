@@ -12,11 +12,53 @@
 use bmol_window_shell::{
     ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics,
 };
+use iced::font::{self, Family, Font};
 use iced::widget::{
     button, column, container, mouse_area, row, scrollable, slider, space, text, toggler,
 };
 use iced::window;
 use iced::{Alignment, Color, Element, Length, Padding, Size, Subscription, Task, Theme};
+
+/// Standard Apple Titlebar Font (SF Pro Text for Latin, PingFang SC for Chinese).
+///
+/// Under macOS, specifying family `"System Font"` (or `".SF NS"`) instructs the system
+/// text shaping engine to render Latin/ASCII using Apple's San Francisco (SF Pro Text) and
+/// seamlessly cascade Chinese glyphs to 苹方 (PingFang SC).
+///
+/// Weight is strictly set to `font::Weight::Normal` (400), eliminating the coarse,
+/// bloated "pseudo-bold" look of default fallbacks.
+#[cfg(target_os = "macos")]
+pub const APPLE_TITLEBAR_FONT: Font = Font {
+    family: Family::Name("System Font"),
+    weight: font::Weight::Normal,
+    stretch: font::Stretch::Normal,
+    style: font::Style::Normal,
+};
+
+#[cfg(not(target_os = "macos"))]
+pub const APPLE_TITLEBAR_FONT: Font = Font {
+    family: Family::Name("SFNS Text"),
+    weight: font::Weight::Normal,
+    stretch: font::Stretch::Normal,
+    style: font::Style::Normal,
+};
+
+/// Emphasized font for unified header navigation/section titles (Weight 500 Medium).
+#[cfg(target_os = "macos")]
+pub const APPLE_HEADER_FONT: Font = Font {
+    family: Family::Name("System Font"),
+    weight: font::Weight::Medium,
+    stretch: font::Stretch::Normal,
+    style: font::Style::Normal,
+};
+
+#[cfg(not(target_os = "macos"))]
+pub const APPLE_HEADER_FONT: Font = Font {
+    family: Family::Name("SFNS Text"),
+    weight: font::Weight::Medium,
+    stretch: font::Stretch::Normal,
+    style: font::Style::Normal,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LayoutSelection {
@@ -765,9 +807,10 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
         view_traffic_lights(),
         // 3. Exactly 16px clearance between traffic lights and title
         column![].width(Length::Fixed(16.0)),
-        // 4. Left-aligned title text (adaptive sharp text on titlebar)
+        // 4. Left-aligned title text (Apple standard 13pt SF Pro / PingFang SC Regular 400)
         text("BMOL Window Shell")
             .size(13)
+            .font(APPLE_TITLEBAR_FONT)
             .color(title_color),
         // 5. Flexible horizontal space in the center
         space::horizontal().width(Length::Fill),
@@ -885,7 +928,8 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element
             2 => "Display & EDR Dynamic Range",
             _ => "Compositor & Stage Manager",
         })
-        .size(15)
+        .size(14)
+        .font(APPLE_HEADER_FONT)
         .color(title_color),
         // Natural flexible space beneath: clicking/dragging here faithfully triggers window dragging!
         space::horizontal().width(Length::Fill),
@@ -1042,7 +1086,8 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element<
             2 => "Display & EDR Dynamic Range",
             _ => "Compositor & Stage Manager",
         })
-        .size(15),
+        .size(14)
+        .font(APPLE_HEADER_FONT),
         space::horizontal().width(Length::Fill),
         row![
             view_theme_toggle(state),
@@ -1695,6 +1740,8 @@ fn main() -> iced::Result {
         .subscription(subscription)
         .theme(theme)
         .style(style)
+        .default_font(APPLE_TITLEBAR_FONT)
+        .antialiasing(true)
         .window(window::Settings {
             size: Size::new(980.0, 640.0),
             min_size: Some(Size::new(760.0, 480.0)),
@@ -1705,3 +1752,38 @@ fn main() -> iced::Result {
         })
         .run()
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::APPLE_TITLEBAR_FONT;
+
+    #[test]
+    fn test_apple_font_resolution() {
+        let font_system = iced::advanced::graphics::text::font_system();
+        let mut fs = font_system.write().unwrap();
+        let db = fs.raw().db();
+
+        assert_eq!(APPLE_TITLEBAR_FONT.weight, iced::font::Weight::Normal);
+
+        // Ensure macOS system font or PingFang is available in the font database
+        let mut has_apple_or_fallback = false;
+        for face in db.faces() {
+            for (fam, _) in &face.families {
+                if fam == "System Font" || fam == ".SF NS" || fam == "PingFang SC" || fam == "SFNS Text" {
+                    has_apple_or_fallback = true;
+                    break;
+                }
+            }
+            if has_apple_or_fallback {
+                break;
+            }
+        }
+        assert!(has_apple_or_fallback, "Apple system font or PingFang should be discoverable on macOS");
+    }
+}
+
+
+
+
+

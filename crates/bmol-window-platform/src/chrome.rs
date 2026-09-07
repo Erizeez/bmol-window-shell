@@ -18,6 +18,28 @@ pub mod traffic_lights {
     pub const EXCLUSION_WIDTH: f32 = 78.0;
 }
 
+/// Typography metrics and recommended Apple font families for window chrome.
+pub mod typography {
+    /// Apple standard window titlebar font size (13.0 pt).
+    pub const TITLEBAR_FONT_SIZE: f32 = 13.0;
+
+    /// Apple unified toolbar section header font size (14.0 pt).
+    pub const UNIFIED_HEADER_FONT_SIZE: f32 = 14.0;
+
+    /// Primary font family name for Apple's San Francisco on macOS (`"System Font"` / `".SF NS"`).
+    pub const MACOS_SYSTEM_FONT: &str = "System Font";
+
+    /// Alternative font family name for Apple's San Francisco on macOS (`".SF NS"`).
+    pub const MACOS_SF_NS: &str = ".SF NS";
+
+    /// Primary Chinese font family name for Apple's 苹方 (`"PingFang SC"`).
+    pub const MACOS_PINGFANG_SC: &str = "PingFang SC";
+
+    /// Standard standalone / Linux font family name for extracted SF Pro.
+    pub const LINUX_SF_PRO_TEXT: &str = "SFNS Text";
+}
+
+
 /// The layout mode for the window chrome / titlebar.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ChromeLayoutMode {
