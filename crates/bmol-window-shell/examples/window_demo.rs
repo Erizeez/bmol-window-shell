@@ -857,9 +857,9 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
         column![].width(Length::Fixed(12.0)),
         // 2. Custom Apple traffic lights
         view_traffic_lights(state),
-        // 3. Exactly 16px clearance between traffic lights and title (10px + 6px slop = 16px)
-        column![].width(Length::Fixed(10.0)),
-        // 4. Left-aligned title text (Apple standard Bold, letter 'a' height ~8px at 14.5pt)
+        // 3. Strictly 15px clearance between traffic lights and title (9px spacer + 6px slop = 15px)
+        column![].width(Length::Fixed(9.0)),
+        // 4. Left-aligned title text (Apple standard Bold at native 13.0pt, letter 'l' height strictly 10px)
         text("BMOL Window Shell")
             .size(APPLE_TITLEBAR_FONT_SIZE)
             .font(APPLE_TITLEBAR_FONT)
@@ -973,7 +973,8 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
     let header_content = row![
         column![].width(Length::Fixed(12.0)),
         view_traffic_lights(state),
-        column![].width(Length::Fixed(14.0)),
+        // Strictly 15px clearance between traffic lights and header title (9px spacer + 6px slop = 15px)
+        column![].width(Length::Fixed(9.0)),
         text(match state.active_tab {
             0 => "Window Architecture",
             1 => "Layout & Collision Hitboxes",

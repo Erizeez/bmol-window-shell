@@ -79,7 +79,7 @@ pub const WINDOW_CONTROL_DISABLED_Y: f32 = 544.0;
 /// independent of the backing scale factor.
 pub const WINDOW_CONTROL_NATIVE_SIZE: f32 = 14.0;
 pub const WINDOW_CONTROL_LARGE_SIZE: f32 = 64.0;
-pub const WINDOW_CONTROL_GAP: f32 = 7.0;
+pub const WINDOW_CONTROL_GAP: f32 = 9.0;
 pub const WINDOW_CONTROL_LARGE_GAP: f32 = 12.0;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

@@ -19,7 +19,7 @@ use spring_rs::{Spring, SpringMotion};
 // Standard macOS traffic light dimensions
 pub const WINDOW_CONTROL_NATIVE_SIZE: f32 = 14.0;
 pub const WINDOW_CONTROL_LARGE_SIZE: f32 = 64.0;
-pub const WINDOW_CONTROL_GAP: f32 = 7.0;
+pub const WINDOW_CONTROL_GAP: f32 = 9.0;
 pub const WINDOW_CONTROL_LARGE_GAP: f32 = 12.0;
 
 pub const WINDOW_CONTROL_NATIVE_IDS: [GlassId; 3] = [GlassId(100), GlassId(101), GlassId(102)];
@@ -593,7 +593,7 @@ mod tests {
     #[test]
     fn test_sizes_and_gaps() {
         assert_eq!(WINDOW_CONTROL_NATIVE_SIZE, 14.0);
-        assert_eq!(WINDOW_CONTROL_GAP, 7.0);
+        assert_eq!(WINDOW_CONTROL_GAP, 9.0);
         assert_eq!(WINDOW_CONTROL_LARGE_SIZE, 64.0);
     }
 

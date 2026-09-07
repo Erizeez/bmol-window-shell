@@ -9,13 +9,16 @@ use crate::geometry::{Insets, Point, Rect};
 /// Default measurements for macOS-style traffic lights.
 pub mod traffic_lights {
     pub const DIAMETER: f32 = 12.0;
-    pub const SPACING: f32 = 8.0;
+    /// Authentic macOS spacing between traffic light buttons (strictly 9.0 px).
+    pub const SPACING: f32 = 9.0;
     pub const LEADING_MARGIN: f32 = 18.0;
-    /// Total width across the three lights (12 + 8 + 12 + 8 + 12 = 52).
-    pub const TOTAL_WIDTH: f32 = 52.0;
+    /// Total width across the three lights (12 + 9 + 12 + 9 + 12 = 54.0 px).
+    pub const TOTAL_WIDTH: f32 = 54.0;
     pub const HEIGHT: f32 = 12.0;
+    /// Clearance distance from the right edge of traffic lights to the first letter of title (strictly 15.0 px).
+    pub const TITLE_CLEARANCE: f32 = 15.0;
     /// Recommended horizontal clearance width including padding.
-    pub const EXCLUSION_WIDTH: f32 = 78.0;
+    pub const EXCLUSION_WIDTH: f32 = 80.0;
 }
 
 /// Typography metrics and recommended Apple font families for window chrome.
@@ -253,8 +256,8 @@ impl WindowChromeMetrics {
                     None
                 };
 
-                // Left-aligned title: starts strictly 16px to the right of traffic lights
-                let left_title_start_x = traffic_lights_hitbox.max_x() + 16.0;
+                // Left-aligned title: starts strictly 15px to the right of traffic lights
+                let left_title_start_x = traffic_lights_hitbox.max_x() + traffic_lights::TITLE_CLEARANCE;
                 let left_title_w = (width - left_title_start_x - config.toolbar_action_reserved_width).max(0.0);
                 let left_aligned_title_rect = if left_title_w > 10.0 {
                     Some(Rect::new(left_title_start_x, 0.0, left_title_w, titlebar_h))
@@ -419,7 +422,7 @@ mod tests {
         assert_eq!(metrics.header_rect, Rect::new(0.0, 0.0, 800.0, 44.0));
         assert_eq!(metrics.content_rect, Rect::new(0.0, 44.0, 800.0, 556.0));
         assert!(metrics.sidebar_rect.is_none());
-        assert!(metrics.traffic_lights_exclusion_zone.width >= 52.0);
+        assert!(metrics.traffic_lights_exclusion_zone.width >= 54.0);
 
         // Traffic lights hit
         assert_eq!(
@@ -427,9 +430,9 @@ mod tests {
             WindowHitZone::TrafficLights
         );
 
-        // Left-aligned title strictly 16px after traffic lights
+        // Left-aligned title strictly 15px after traffic lights
         let title_rect = metrics.left_aligned_title_rect.expect("left-aligned title exists");
-        assert_eq!(title_rect.x, metrics.traffic_lights_hitbox.max_x() + 16.0);
+        assert_eq!(title_rect.x, metrics.traffic_lights_hitbox.max_x() + 15.0);
 
         // Content hit
         assert_eq!(metrics.hit_test(100.0, 100.0), WindowHitZone::Content);
