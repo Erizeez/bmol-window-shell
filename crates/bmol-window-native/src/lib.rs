@@ -66,6 +66,19 @@ pub fn configure_window_corner_radius(target: DesktopBlurTarget, radius: f64) {
     let _ = (target, radius);
 }
 
+/// Toggles whether the native window casts a system drop shadow.
+///
+/// On macOS 11+, NSWindow generates an automatic 1px dark rim stroke around
+/// the window frame whenever `hasShadow` is true. Setting this to false completely
+/// removes that 1px system border/rim and system shadow.
+pub fn configure_window_shadow(target: DesktopBlurTarget, has_shadow: bool) {
+    #[cfg(target_os = "macos")]
+    macos::configure_window_shadow(target, has_shadow);
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = (target, has_shadow);
+}
+
 /// Captures the pixels below a transparent application window for shader use.
 ///
 /// The native window compositor can blur the desktop behind transparent
@@ -341,13 +354,7 @@ mod macos {
         };
         let radius = radius.max(0.0);
         let masks = radius > 0.0;
-        unsafe {
-            let () = msg_send![&*layer, setCornerRadius: radius];
-            let () = msg_send![&*layer, setMasksToBounds: masks];
-            let () = msg_send![&*layer, setOpaque: false];
-            let continuous = NSString::from_str("continuous");
-            let () = msg_send![&*layer, setCornerCurve: &*continuous];
-        }
+        apply_layer_corner_radius(&layer, radius, masks);
 
         // Eliminate the black border and corner artifacts by configuring the live NSWindow:
         // 1. Transparent background color (clearColor)
@@ -367,6 +374,33 @@ mod macos {
 
                 window.invalidateShadow();
             }
+        }
+    }
+
+    fn apply_layer_corner_radius(layer: &CALayer, radius: f64, masks: bool) {
+        unsafe {
+            let () = msg_send![&*layer, setCornerRadius: radius];
+            let () = msg_send![&*layer, setMasksToBounds: masks];
+            let () = msg_send![&*layer, setOpaque: false];
+            let continuous = NSString::from_str("continuous");
+            let () = msg_send![&*layer, setCornerCurve: &*continuous];
+        }
+        if let Some(sublayers) = unsafe { layer.sublayers() } {
+            for index in 0..sublayers.count() {
+                let sublayer = sublayers.objectAtIndex(index);
+                apply_layer_corner_radius(&sublayer, radius, masks);
+            }
+        }
+    }
+
+    pub fn configure_window_shadow(target: DesktopBlurTarget, has_shadow: bool) {
+        let Some(ns_view) = std::ptr::NonNull::new(target.0 as *mut c_void) else {
+            return;
+        };
+        let view: &NSView = unsafe { ns_view.cast().as_ref() };
+        if let Some(window) = view.window() {
+            window.setHasShadow(has_shadow);
+            window.invalidateShadow();
         }
     }
 

@@ -34,6 +34,7 @@ enum Message {
     UnifiedHeightChanged(f32),
     ToggleHitboxes(bool),
     ToggleBlur(bool),
+    ToggleShadow(bool),
     ToggleEdr(bool),
     ToggleGuard(bool),
     CornerRadiusChanged(f64),
@@ -56,6 +57,7 @@ struct DemoState {
     sidebar_width: f32,
     show_hitboxes: bool,
     blur_enabled: bool,
+    system_shadow: bool,
     edr_enabled: bool,
     guard_enabled: bool,
     corner_radius: f64,
@@ -79,6 +81,7 @@ impl Default for DemoState {
             sidebar_width: 220.0,
             show_hitboxes: false,
             blur_enabled: true,
+            system_shadow: false, // Default to FALSE! Eliminates the automatic 1px dark rim macOS draws around windows
             edr_enabled: true,
             guard_enabled: true,
             corner_radius: 16.0,
@@ -118,6 +121,7 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
             state.native_attached = true;
             let radius = state.corner_radius;
             let edr = state.edr_enabled;
+            let shadow = state.system_shadow;
 
             window::run(id, move |w| {
                 if let Ok(handle) = w.window_handle() {
@@ -125,6 +129,7 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
                     if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
                         bmol_window_shell::install_stage_manager_guard(target);
                         bmol_window_shell::configure_window_corner_radius(target, radius);
+                        bmol_window_shell::configure_window_shadow(target, shadow);
                         bmol_window_shell::configure_extended_dynamic_range(target, edr);
                         bmol_window_shell::refresh_desktop_blur(target);
                     }
@@ -166,6 +171,22 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
                             if enabled {
                                 bmol_window_shell::refresh_desktop_blur(target);
                             }
+                        }
+                    }
+                })
+                .discard()
+            } else {
+                Task::none()
+            }
+        }
+        Message::ToggleShadow(enabled) => {
+            state.system_shadow = enabled;
+            if let Some(id) = state.window_id {
+                window::run(id, move |w| {
+                    if let Ok(handle) = w.window_handle() {
+                        let rwh = handle.as_raw();
+                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                            bmol_window_shell::configure_window_shadow(target, enabled);
                         }
                     }
                 })
@@ -373,7 +394,7 @@ fn view_traffic_lights() -> Element<'static, Message> {
 // Layout 1: Standalone Titlebar (Separate) - 32px White Bar, 16px Clearance
 // =========================================================================
 
-fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, Message> {
+fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
     let titlebar_height = state.metrics.header_rect.height;
 
     let mode_switch = row![
@@ -471,17 +492,7 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
             ..Default::default()
         });
 
-    let separator = if plan.show_titlebar_separator {
-        container(column![])
-            .height(Length::Fixed(1.0))
-            .width(Length::Fill)
-            .style(|_theme| container::Style {
-                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.12).into()),
-                ..Default::default()
-            })
-    } else {
-        container(column![]).height(Length::Fixed(0.0))
-    };
+    let separator = container(column![]).height(Length::Fixed(0.0));
 
     // 2. Content below titlebar (safe area)
     let sidebar = view_sidebar_items(state);
@@ -500,8 +511,7 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
                         bottom_right: 0.0,
                         bottom_left: 16.0,
                     },
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.05),
-                    width: 1.0,
+                    ..Default::default()
                 },
                 ..Default::default()
             }),
@@ -540,7 +550,7 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
 // Layout 2: Unified (Integrated) Chrome with Custom Traffic Lights
 // =========================================================================
 
-fn view_unified_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, Message> {
+fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
     let sidebar_inner = column![
         // Top row with custom traffic lights
         row![
@@ -569,29 +579,18 @@ fn view_unified_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, M
         .style(|_theme| container::Style {
             background: Some(Color::from_rgba(0.08, 0.09, 0.11, 0.65).into()),
             border: iced::Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-                width: 1.0,
                 radius: iced::border::Radius {
                     top_left: 16.0,
                     top_right: 0.0,
                     bottom_right: 0.0,
                     bottom_left: 16.0,
                 },
+                ..Default::default()
             },
             ..Default::default()
         });
 
-    let v_separator = if plan.show_sidebar_separator {
-        container(column![])
-            .width(Length::Fixed(1.0))
-            .height(Length::Fill)
-            .style(|_theme| container::Style {
-                background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
-                ..Default::default()
-            })
-    } else {
-        container(column![]).width(Length::Fixed(0.0))
-    };
+    let v_separator = container(column![]).width(Length::Fixed(0.0));
 
     // 2. Right Content Area: Toolbar on top + cards
     let top_toolbar = row![
@@ -896,6 +895,18 @@ fn view_tab_architecture(state: &DemoState) -> Element<'_, Message> {
                 ]
                 .width(Length::Fill),
                 toggler(state.blur_enabled).on_toggle(Message::ToggleBlur),
+            ]
+            .align_y(Alignment::Center),
+            card_divider(),
+            row![
+                column![
+                    text("macOS WindowServer Shadow & 1px Rim").size(14),
+                    text("Turning this OFF completely removes the automatic 1px dark border drawn by macOS.")
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.65)),
+                ]
+                .width(Length::Fill),
+                toggler(state.system_shadow).on_toggle(Message::ToggleShadow),
             ]
             .align_y(Alignment::Center),
             card_divider(),
