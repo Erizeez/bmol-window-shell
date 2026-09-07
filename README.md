@@ -13,15 +13,28 @@ Compatible with any windowing or GUI framework via `raw-window-handle` (Iced, Wi
 - **Backdrop Capture**: Captures desktop pixels beneath the transparent window for optical refraction shaders.
 - **Asset Authoring Hooks**: Vector SF Symbols extraction and `.car` asset catalog rendition reading.
 
-## Running the Seamless Window Demo
+## Running the Complete macOS Window Demo
 
-Run the standalone native frameless window demonstration:
+Run the complete macOS-style window replication demo:
 
 ```bash
-cargo run -p bmol-window-shell --example seamless_window
+cargo run -p bmol-window-shell --example macos_window_demo
 ```
 
-This demo opens a native transparent window over your macOS desktop, demonstrating real-time SkyLight background blur, EDR Metal configuration, continuous corner clipping, and Stage Manager transition protection.
+### What this demo replicates:
+1. **Interactive Traffic Lights**:
+   - Red (Close), Yellow (Minimize), Green (Toggle Fullscreen).
+   - Inactive window auto-dimming to Apple silver-gray (`#4E4E52`).
+   - Hover reveals internal vector glyphs ($\times$, $-$, dual arrows).
+2. **Native Titlebar Dragging**:
+   - Hold & drag anywhere on the titlebar to move the window.
+   - Double-click the titlebar to toggle maximize/restore.
+3. **Continuous Squircle Window Frame**:
+   - 16.0pt continuous corner radius mask clipping the window layer.
+   - Transparent background revealing true macOS SkyLight desktop wallpaper blur.
+4. **Structured Split-View Layout & Content**:
+   - Frosted sidebar with search pill and active item indicator.
+   - Two settings cards with system metrics, toggle switch, and divider lines.
 
 ## License
 
