@@ -13,7 +13,7 @@ use bmol_window_shell::{
     ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics,
 };
 use iced::widget::{
-    button, column, container, row, scrollable, slider, space, text, toggler,
+    button, column, container, mouse_area, row, scrollable, slider, space, text, toggler,
 };
 use iced::window;
 use iced::{Alignment, Color, Element, Length, Padding, Size, Subscription, Task, Theme};
@@ -706,16 +706,8 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
         text("BMOL Window Shell")
             .size(13)
             .color(title_color),
-        // 5. Draggable titlebar area in the center: drag window anywhere here
-        button(space::horizontal().height(Length::Fill))
-            .padding(0)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .on_press(Message::DragWindow)
-            .style(|_theme, _status| button::Style {
-                background: None,
-                ..Default::default()
-            }),
+        // 5. Flexible horizontal space in the center
+        space::horizontal().width(Length::Fill),
         // 6. Right action area
         mode_switch,
         column![].width(Length::Fixed(16.0)),
@@ -724,7 +716,11 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
     .height(Length::Fixed(titlebar_height))
     .width(Length::Fill);
 
-    let titlebar_container = container(titlebar_content)
+    let draggable_titlebar = mouse_area(titlebar_content)
+        .on_press(Message::DragWindow)
+        .on_double_click(Message::ToggleMaximize);
+
+    let titlebar_container = container(draggable_titlebar)
         .style(move |_theme| container::Style {
             background: Some(titlebar_bg.into()),
             border: iced::Border {
@@ -798,27 +794,40 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
 // =========================================================================
 
 fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
-    let sidebar_inner = column![
-        // Top row with custom traffic lights
-        row![
-            column![].width(Length::Fixed(4.0)),
-            view_traffic_lights(),
-        ]
-        .height(Length::Fixed(34.0))
-        .align_y(Alignment::Center),
+    let header_height = state.metrics.header_rect.height;
+
+    // Top row of sidebar: custom traffic lights aligned to header_height
+    let sidebar_header_content = row![
+        column![].width(Length::Fixed(16.0)),
+        view_traffic_lights(),
+        space::horizontal().width(Length::Fill),
+    ]
+    .align_y(Alignment::Center)
+    .height(Length::Fixed(header_height))
+    .width(Length::Fill);
+
+    let draggable_sidebar_header = mouse_area(sidebar_header_content)
+        .on_press(Message::DragWindow)
+        .on_double_click(Message::ToggleMaximize);
+
+    let sidebar_body = column![
         text("NAVIGATION")
             .size(11)
             .color(Color::from_rgb(0.5, 0.5, 0.55)),
         view_sidebar_items(state),
     ]
     .padding(Padding {
-        top: 8.0,
+        top: 4.0,
         right: 16.0,
         bottom: 16.0,
         left: 16.0,
     })
     .spacing(12)
     .height(Length::Fill);
+
+    let sidebar_inner = column![draggable_sidebar_header, sidebar_body]
+        .height(Length::Fill)
+        .width(Length::Fill);
 
     let is_dark = state.is_dark();
     let unified_sidebar_bg = if is_dark {
@@ -852,7 +861,8 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
     let v_separator = container(column![]).width(Length::Fixed(0.0));
 
     // 2. Right Content Area: Toolbar on top + cards
-    let top_toolbar = row![
+    let top_toolbar_content = row![
+        column![].width(Length::Fixed(24.0)),
         text(match state.active_tab {
             0 => "Window Architecture",
             1 => "Layout & Collision Hitboxes",
@@ -860,16 +870,8 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
             _ => "Compositor & Stage Manager",
         })
         .size(16),
-        // Draggable empty space in the toolbar
-        button(space::horizontal().height(Length::Fill))
-            .padding(0)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .on_press(Message::DragWindow)
-            .style(|_theme, _status| button::Style {
-                background: None,
-                ..Default::default()
-            }),
+        // Continuous flexible draggable space across entire toolbar
+        space::horizontal().width(Length::Fill),
         row![
             view_theme_toggle(state),
             column![].width(Length::Fixed(6.0)),
@@ -911,14 +913,19 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
         ]
         .spacing(4)
         .align_y(Alignment::Center),
+        column![].width(Length::Fixed(24.0)),
     ]
     .align_y(Alignment::Center)
-    .padding([12, 24])
-    .height(Length::Fixed(state.metrics.header_rect.height));
+    .height(Length::Fixed(header_height))
+    .width(Length::Fill);
+
+    let draggable_top_toolbar = mouse_area(top_toolbar_content)
+        .on_press(Message::DragWindow)
+        .on_double_click(Message::ToggleMaximize);
 
     let main_body = view_content_cards(state);
 
-    let content_area = column![top_toolbar, main_body]
+    let content_area = column![draggable_top_toolbar, main_body]
         .width(Length::Fill)
         .height(Length::Fill);
 

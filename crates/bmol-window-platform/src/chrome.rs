@@ -258,34 +258,13 @@ impl WindowChromeMetrics {
                     (None, None, Rect::new(0.0, 0.0, width, height))
                 };
 
-                // Draggable areas:
-                // 1. Top of sidebar (between traffic lights and sidebar right edge)
-                // 2. Toolbar center in main content view
-                let mut drag_regions = Vec::new();
-                if let Some(sb_w) = sb_w {
-                    let sb_drag_w = (sb_w - traffic_lights_exclusion_zone.max_x()).max(0.0);
-                    if sb_drag_w > 10.0 {
-                        drag_regions.push(Rect::new(
-                            traffic_lights_exclusion_zone.max_x(),
-                            0.0,
-                            sb_drag_w,
-                            header_h,
-                        ));
-                    }
-                    // Main pane top toolbar draggable area
-                    let content_drag_w = (width - sb_w - config.toolbar_action_reserved_width).max(0.0);
-                    if content_drag_w > 20.0 {
-                        drag_regions.push(Rect::new(sb_w, 0.0, content_drag_w, header_h));
-                    }
-                } else {
-                    let full_drag_w = (width - traffic_lights_exclusion_zone.max_x() - config.toolbar_action_reserved_width).max(0.0);
-                    drag_regions.push(Rect::new(
-                        traffic_lights_exclusion_zone.max_x(),
-                        0.0,
-                        full_drag_w,
-                        header_h,
-                    ));
-                }
+                // Draggable area:
+                // Across the entire top header strip, from the traffic lights exclusion zone
+                // all the way to the toolbar action buttons on the far right.
+                let drag_start_x = traffic_lights_exclusion_zone.max_x();
+                let full_drag_w =
+                    (width - drag_start_x - config.toolbar_action_reserved_width).max(0.0);
+                let drag_regions = vec![Rect::new(drag_start_x, 0.0, full_drag_w, header_h)];
 
                 Self {
                     window_size: (width, height),
