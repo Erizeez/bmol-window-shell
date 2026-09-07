@@ -210,7 +210,10 @@ impl DemoState {
                 (self.unified_header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
             }
         };
-        iced_backend::set_window_control_origin(18.0, origin_y);
+        iced_backend::set_window_control_origin(
+            iced_backend::WINDOW_CONTROL_NATIVE_X,
+            origin_y,
+        );
     }
 }
 
@@ -232,7 +235,10 @@ fn boot() -> (DemoState, Task<Message>) {
         iced_backend::set_window_control_scale(id, 1.0);
     }
     let origin_y = (state.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5;
-    iced_backend::set_window_control_origin(18.0, origin_y);
+    iced_backend::set_window_control_origin(
+        iced_backend::WINDOW_CONTROL_NATIVE_X,
+        origin_y,
+    );
 
     (
         state,
