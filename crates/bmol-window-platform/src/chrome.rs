@@ -49,7 +49,7 @@ pub mod typography {
 /// - **Light Mode**: A crisp 1px subtle gray outer rim (`rgba(0, 0, 0, 0.10)`).
 /// - **Dark Mode**: A dual-layer compound 2px rim:
 ///   1. Outer rim: 1px deep black line (`rgba(0, 0, 0, 0.85)`) to delineate from the shadow and desktop.
-///   2. Inner rim: 1px subtle light gray highlight bevel (`rgba(255, 255, 255, 0.14)`) providing depth.
+///   2. Inner rim: 1px subtle gray line (`rgb(70, 70, 70)`) providing crisp border depth.
 pub mod window_rim {
     use crate::geometry::Insets;
 
@@ -61,9 +61,15 @@ pub mod window_rim {
     pub const DARK_OUTER_RIM_WIDTH: f32 = 1.0;
     pub const DARK_OUTER_RIM_COLOR_RGBA: (f32, f32, f32, f32) = (0.0, 0.0, 0.0, 0.85);
 
-    /// In Dark mode inner layer: 1px subtle light gray highlight bevel.
+    /// In Dark mode inner layer: 1px subtle gray line (`rgb(70, 70, 70)`).
     pub const DARK_INNER_RIM_WIDTH: f32 = 1.0;
-    pub const DARK_INNER_RIM_COLOR_RGBA: (f32, f32, f32, f32) = (1.0, 1.0, 1.0, 0.14);
+    pub const DARK_INNER_RIM_COLOR_RGB8: (u8, u8, u8) = (70, 70, 70);
+    pub const DARK_INNER_RIM_COLOR_RGBA: (f32, f32, f32, f32) = (
+        70.0 / 255.0,
+        70.0 / 255.0,
+        70.0 / 255.0,
+        1.0,
+    );
 
     /// Total physical compound rim thickness in dark mode (1px outer + 1px inner = 2.0px).
     pub const DARK_TOTAL_RIM_WIDTH: f32 = 2.0;
@@ -592,6 +598,7 @@ mod tests {
         );
         assert_eq!(window_rim::DARK_TOTAL_RIM_WIDTH, 2.0);
 
+        assert_eq!(window_rim::DARK_INNER_RIM_COLOR_RGB8, (70, 70, 70));
         assert_eq!(window_rim::rim_thickness(false), 1.0);
         assert_eq!(window_rim::rim_thickness(true), 2.0);
         assert_eq!(window_rim::insets(false), Insets::uniform(1.0));

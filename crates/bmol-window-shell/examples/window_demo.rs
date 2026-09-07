@@ -610,14 +610,14 @@ fn wrap_window_rim<'a>(
 ) -> AppElement<'a> {
     if is_dark {
         // Authentic macOS Dark Mode: Dual-layer compound rim (2px total physical width)
-        // 1. Inner Layer: 1px subtle light gray highlight bevel (rgba(1.0, 1.0, 1.0, 0.14)) with 1px padding
+        // 1. Inner Layer: 1px subtle gray line (rgb(70, 70, 70)) with 1px padding
         let inner_window = container(content.into())
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(1.0)
             .style(move |_theme| container::Style {
                 border: iced::Border {
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.14),
+                    color: Color::from_rgb8(70, 70, 70),
                     width: 1.0,
                     radius: (outer_radius - 1.0).max(0.0).into(),
                 },
@@ -1629,7 +1629,7 @@ fn view_tab_hitboxes_and_layout(state: &DemoState) -> AppElement<'_> {
                 "{:.1} pt ({})",
                 metrics.rim_insets.left,
                 if state.is_dark() {
-                    "Dark compound 2px: 1px black + 1px highlight"
+                    "Dark compound 2px: 1px black + 1px gray (70, 70, 70)"
                 } else {
                     "Light 1px subtle gray"
                 }
