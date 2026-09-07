@@ -9,7 +9,8 @@ pub use native::{
     DesktopBlurTarget, WindowAppearance, capture_desktop_backdrop, configure_extended_dynamic_range,
     configure_window_appearance, configure_window_corner_radius, configure_window_shadow,
     desktop_blur_target, graphic_icon_png, glyph_pdf, install_stage_manager_guard,
-    named_asset_png, refresh_desktop_blur, system_symbol_pdf,
+    is_system_dark_mode, named_asset_png, refresh_desktop_blur, system_symbol_pdf,
+    system_theme_change_counter,
 };
 
 pub use platform::{

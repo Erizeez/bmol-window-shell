@@ -40,6 +40,7 @@ enum Message {
     SelectLayout(LayoutSelection),
     SelectTheme(ThemePreference),
     SystemThemeChanged(iced::theme::Mode),
+    PollSystemTheme,
     SeparateHeightChanged(f32),
     UnifiedHeightChanged(f32),
     ToggleHitboxes(bool),
@@ -82,6 +83,12 @@ impl Default for DemoState {
     fn default() -> Self {
         let default_config = WindowChromeConfig::separate(32.0);
         let metrics = WindowChromeMetrics::compute(980.0, 640.0, &default_config);
+        let initial_dark = bmol_window_shell::is_system_dark_mode();
+        let initial_theme = if initial_dark {
+            iced::theme::Mode::Dark
+        } else {
+            iced::theme::Mode::Light
+        };
 
         Self {
             window_id: None,
@@ -89,7 +96,7 @@ impl Default for DemoState {
             active_tab: 0,
             layout_selection: LayoutSelection::Separate,
             theme_preference: ThemePreference::System,
-            system_theme: iced::theme::Mode::Dark,
+            system_theme: initial_theme,
             separate_titlebar_height: 32.0,
             unified_header_height: 54.0,
             sidebar_width: 220.0,
@@ -111,7 +118,14 @@ impl DemoState {
         match self.theme_preference {
             ThemePreference::System => match self.system_theme {
                 iced::theme::Mode::Light => iced::theme::Mode::Light,
-                _ => iced::theme::Mode::Dark,
+                iced::theme::Mode::Dark => iced::theme::Mode::Dark,
+                iced::theme::Mode::None => {
+                    if bmol_window_shell::is_system_dark_mode() {
+                        iced::theme::Mode::Dark
+                    } else {
+                        iced::theme::Mode::Light
+                    }
+                }
             },
             ThemePreference::Light => iced::theme::Mode::Light,
             ThemePreference::Dark => iced::theme::Mode::Dark,
@@ -210,7 +224,55 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
         }
         Message::SystemThemeChanged(mode) => {
             state.system_theme = mode;
-            Task::none()
+            if state.theme_preference == ThemePreference::System {
+                if let Some(id) = state.window_id {
+                    let appearance = state.native_appearance();
+                    window::run(id, move |w| {
+                        if let Ok(handle) = w.window_handle() {
+                            let rwh = handle.as_raw();
+                            if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                                bmol_window_shell::configure_window_appearance(target, appearance);
+                            }
+                        }
+                    })
+                    .discard()
+                } else {
+                    Task::none()
+                }
+            } else {
+                Task::none()
+            }
+        }
+        Message::PollSystemTheme => {
+            let current_dark = bmol_window_shell::is_system_dark_mode();
+            let current_mode = if current_dark {
+                iced::theme::Mode::Dark
+            } else {
+                iced::theme::Mode::Light
+            };
+            if state.system_theme != current_mode {
+                state.system_theme = current_mode;
+                if state.theme_preference == ThemePreference::System {
+                    if let Some(id) = state.window_id {
+                        let appearance = state.native_appearance();
+                        window::run(id, move |w| {
+                            if let Ok(handle) = w.window_handle() {
+                                let rwh = handle.as_raw();
+                                if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                                    bmol_window_shell::configure_window_appearance(target, appearance);
+                                }
+                            }
+                        })
+                        .discard()
+                    } else {
+                        Task::none()
+                    }
+                } else {
+                    Task::none()
+                }
+            } else {
+                Task::none()
+            }
         }
         Message::SeparateHeightChanged(h) => {
             state.separate_titlebar_height = h;
@@ -375,6 +437,7 @@ fn subscription(_state: &DemoState) -> Subscription<Message> {
         window::open_events().map(Message::WindowOpened),
         window::resize_events().map(|(_id, size)| Message::WindowResized(size)),
         iced::system::theme_changes().map(Message::SystemThemeChanged),
+        iced::time::every(std::time::Duration::from_millis(250)).map(|_| Message::PollSystemTheme),
     ])
 }
 
