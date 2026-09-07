@@ -1,9 +1,13 @@
-//! Complete authentic macOS Window Demo with Separate and Unified Chrome Layouts.
+//! Complete authentic macOS Window Demo with Custom Traffic Lights and Frameless Chrome.
 //!
-//! Replicates an authentic macOS application window with two layout strategies:
-//! 1. Standalone Titlebar (Separate): Distinct titlebar above content; content begins below titlebar.
-//! 2. Unified Chrome (Integrated): Sidebar and content extend to the top window edge,
-//!    with traffic lights exclusion zone and collision hitboxes provided for downstream drawing and layout clearance.
+//! Features:
+//! - Pure frameless window (`decorations: false`), completely eliminating system black borders and outlines
+//! - Hand-crafted Apple-style traffic lights (Close, Minimize, Maximize) with authentic colors, borders, and actions
+//! - Two layout strategies:
+//!   1. Standalone Titlebar (Separate): 32px white titlebar, left-aligned title strictly 16px from traffic lights
+//!   2. Unified Chrome (Integrated): Seamless sidebar extending to top with automatic traffic lights clearance
+//! - Full window dragging support across titlebar drag regions
+//! - SkyLight real-time blur, continuous squircle curvature, and Stage Manager re-blur protection
 
 use bmol_window_shell::{
     ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics,
@@ -35,6 +39,10 @@ enum Message {
     CornerRadiusChanged(f64),
     OpacityChanged(f32),
     ResetDefaults,
+    CloseWindow,
+    MinimizeWindow,
+    ToggleMaximize,
+    DragWindow,
 }
 
 #[derive(Debug)]
@@ -244,6 +252,34 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
                 Task::none()
             }
         }
+        Message::CloseWindow => {
+            if let Some(id) = state.window_id {
+                window::close(id)
+            } else {
+                Task::none()
+            }
+        }
+        Message::MinimizeWindow => {
+            if let Some(id) = state.window_id {
+                window::minimize(id, true)
+            } else {
+                Task::none()
+            }
+        }
+        Message::ToggleMaximize => {
+            if let Some(id) = state.window_id {
+                window::toggle_maximize(id)
+            } else {
+                Task::none()
+            }
+        }
+        Message::DragWindow => {
+            if let Some(id) = state.window_id {
+                window::drag(id)
+            } else {
+                Task::none()
+            }
+        }
     };
 
     state.update_metrics();
@@ -260,19 +296,85 @@ fn subscription(_state: &DemoState) -> Subscription<Message> {
 fn view(state: &DemoState) -> Element<'_, Message> {
     let plan = ChromeDrawPlan::from_metrics(&state.metrics);
 
-    match state.layout_selection {
+    let content = match state.layout_selection {
         LayoutSelection::Separate => view_separate_window(state, plan),
         LayoutSelection::Unified => view_unified_window(state, plan),
-    }
+    };
+
+    // Wrap the entire window in a continuous rounded container with transparent edges
+    container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_theme| container::Style {
+            border: iced::Border {
+                radius: 16.0.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .into()
 }
 
 // =========================================================================
-// Layout 1: Standalone Titlebar (Separate)
+// Hand-crafted Apple-style Traffic Lights (Close / Minimize / Zoom)
+// =========================================================================
+
+fn view_traffic_lights() -> Element<'static, Message> {
+    let make_circle = |fill: Color, stroke: Color, msg: Message| {
+        button(space::horizontal().width(Length::Fixed(12.0)).height(Length::Fixed(12.0)))
+            .padding(0)
+            .width(Length::Fixed(12.0))
+            .height(Length::Fixed(12.0))
+            .on_press(msg)
+            .style(move |_theme, status| {
+                let is_hover = matches!(status, button::Status::Hovered | button::Status::Pressed);
+                button::Style {
+                    background: Some(fill.into()),
+                    border: iced::Border {
+                        color: if is_hover {
+                            stroke
+                        } else {
+                            Color { a: 0.35, ..stroke }
+                        },
+                        width: 0.5,
+                        radius: 6.0.into(),
+                    },
+                    ..Default::default()
+                }
+            })
+    };
+
+    // Authentic Apple palette
+    let close_btn = make_circle(
+        Color::from_rgb8(0xFF, 0x5F, 0x56),
+        Color::from_rgb8(0xE0, 0x44, 0x3E),
+        Message::CloseWindow,
+    );
+
+    let min_btn = make_circle(
+        Color::from_rgb8(0xFF, 0xBD, 0x2E),
+        Color::from_rgb8(0xDE, 0xA1, 0x23),
+        Message::MinimizeWindow,
+    );
+
+    let zoom_btn = make_circle(
+        Color::from_rgb8(0x27, 0xC9, 0x3F),
+        Color::from_rgb8(0x1A, 0xAB, 0x29),
+        Message::ToggleMaximize,
+    );
+
+    row![close_btn, min_btn, zoom_btn]
+        .spacing(8)
+        .align_y(Alignment::Center)
+        .into()
+}
+
+// =========================================================================
+// Layout 1: Standalone Titlebar (Separate) - 32px White Bar, 16px Clearance
 // =========================================================================
 
 fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, Message> {
     let titlebar_height = state.metrics.header_rect.height;
-    let tl_w = state.metrics.traffic_lights_hitbox.max_x();
 
     let mode_switch = row![
         button(text("Separate (Active)").size(11))
@@ -326,25 +428,46 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
     .align_y(Alignment::Center);
 
     let titlebar_content = row![
-        // 1. Reserved space for native traffic lights
-        column![].width(Length::Fixed(tl_w)),
-        // 2. 16px clearance between traffic lights and title
+        // 1. Left leading edge margin (16px)
         column![].width(Length::Fixed(16.0)),
-        // 3. Left-aligned title text (crisp dark text on white titlebar)
+        // 2. Custom Apple traffic lights
+        view_traffic_lights(),
+        // 3. Exactly 16px clearance between traffic lights and title
+        column![].width(Length::Fixed(16.0)),
+        // 4. Left-aligned title text (sharp dark text on white titlebar)
         text("BMOL Window Shell")
             .size(13)
             .color(Color::from_rgb(0.12, 0.13, 0.15)),
-        space::horizontal(),
+        // 5. Draggable titlebar area in the center: drag window anywhere here
+        button(space::horizontal().height(Length::Fill))
+            .padding(0)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .on_press(Message::DragWindow)
+            .style(|_theme, _status| button::Style {
+                background: None,
+                ..Default::default()
+            }),
+        // 6. Right action area
         mode_switch,
+        column![].width(Length::Fixed(16.0)),
     ]
     .align_y(Alignment::Center)
-    .padding([0, 16])
     .height(Length::Fixed(titlebar_height))
     .width(Length::Fill);
 
     let titlebar_container = container(titlebar_content)
         .style(|_theme| container::Style {
             background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.98).into()),
+            border: iced::Border {
+                radius: iced::border::Radius {
+                    top_left: 16.0,
+                    top_right: 16.0,
+                    bottom_right: 0.0,
+                    bottom_left: 0.0,
+                },
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -371,9 +494,14 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
             .style(|_theme| container::Style {
                 background: Some(Color::from_rgba(0.09, 0.10, 0.12, 0.5).into()),
                 border: iced::Border {
+                    radius: iced::border::Radius {
+                        top_left: 0.0,
+                        top_right: 0.0,
+                        bottom_right: 0.0,
+                        bottom_left: 16.0,
+                    },
                     color: Color::from_rgba(1.0, 1.0, 1.0, 0.05),
                     width: 1.0,
-                    radius: 0.0.into(),
                 },
                 ..Default::default()
             }),
@@ -382,6 +510,15 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
             .height(Length::Fill)
             .style(move |_theme| container::Style {
                 background: Some(Color::from_rgba(0.12, 0.13, 0.16, state.opacity).into()),
+                border: iced::Border {
+                    radius: iced::border::Radius {
+                        top_left: 0.0,
+                        top_right: 0.0,
+                        bottom_right: 16.0,
+                        bottom_left: 0.0,
+                    },
+                    ..Default::default()
+                },
                 ..Default::default()
             }),
     ]
@@ -400,22 +537,25 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
 }
 
 // =========================================================================
-// Layout 2: Unified (Integrated) Chrome
+// Layout 2: Unified (Integrated) Chrome with Custom Traffic Lights
 // =========================================================================
 
 fn view_unified_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, Message> {
-    let tl_clearance_h = state.metrics.traffic_lights_exclusion_zone.height;
-
     let sidebar_inner = column![
-        // Space reserved precisely for traffic lights clearance in unified mode
-        column![].height(Length::Fixed(tl_clearance_h)),
+        // Top row with custom traffic lights
+        row![
+            column![].width(Length::Fixed(4.0)),
+            view_traffic_lights(),
+        ]
+        .height(Length::Fixed(34.0))
+        .align_y(Alignment::Center),
         text("NAVIGATION")
             .size(11)
             .color(Color::from_rgb(0.5, 0.5, 0.55)),
         view_sidebar_items(state),
     ]
     .padding(Padding {
-        top: 0.0,
+        top: 8.0,
         right: 16.0,
         bottom: 16.0,
         left: 16.0,
@@ -431,7 +571,12 @@ fn view_unified_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, M
             border: iced::Border {
                 color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
                 width: 1.0,
-                radius: 0.0.into(),
+                radius: iced::border::Radius {
+                    top_left: 16.0,
+                    top_right: 0.0,
+                    bottom_right: 0.0,
+                    bottom_left: 16.0,
+                },
             },
             ..Default::default()
         });
@@ -457,7 +602,16 @@ fn view_unified_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, M
             _ => "Compositor & Stage Manager",
         })
         .size(16),
-        space::horizontal(),
+        // Draggable empty space in the toolbar
+        button(space::horizontal().height(Length::Fill))
+            .padding(0)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .on_press(Message::DragWindow)
+            .style(|_theme, _status| button::Style {
+                background: None,
+                ..Default::default()
+            }),
         row![
             button(text("Switch to Separate").size(11))
                 .padding([4, 8])
@@ -506,6 +660,15 @@ fn view_unified_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, M
         .height(Length::Fill)
         .style(move |_theme| container::Style {
             background: Some(Color::from_rgba(0.12, 0.13, 0.16, state.opacity).into()),
+            border: iced::Border {
+                radius: iced::border::Radius {
+                    top_left: 0.0,
+                    top_right: 16.0,
+                    bottom_right: 16.0,
+                    bottom_left: 0.0,
+                },
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -681,7 +844,7 @@ fn view_tab_architecture(state: &DemoState) -> Element<'_, Message> {
             card_divider(),
             text(match state.layout_selection {
                 LayoutSelection::Separate => {
-                    "Current: Separate Mode. Content strictly starts below the titlebar. Downstream applications do not need manual traffic lights clearance."
+                    "Current: Separate Mode. 32px pure white titlebar with custom traffic lights. Content strictly starts below the titlebar."
                 }
                 LayoutSelection::Unified => {
                     "Current: Unified Mode. Content & sidebar extend to top edges. Downstream applications avoid traffic lights using computed collision hitboxes."
@@ -1010,12 +1173,7 @@ fn main() -> iced::Result {
             min_size: Some(Size::new(760.0, 480.0)),
             transparent: true,
             blur: true,
-            decorations: true,
-            platform_specific: window::settings::PlatformSpecific {
-                title_hidden: true,
-                titlebar_transparent: true,
-                fullsize_content_view: true,
-            },
+            decorations: false, // Pure frameless! 100% black-border free!
             ..Default::default()
         })
         .run()
