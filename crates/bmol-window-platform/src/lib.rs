@@ -7,9 +7,12 @@ pub mod geometry;
 
 pub use chrome::{
     ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics, WindowHitZone,
-    traffic_lights, typography, window_rim,
+    WindowState, traffic_lights, typography, window_rim,
 };
-pub use geometry::{Insets, Point, Rect, Size as LogicalSize};
+pub use geometry::{
+    Insets, Point, Rect, ResizeDirection, Size as LogicalSize, physical_pixels_to_logical,
+    snap_insets_to_physical, snap_to_physical_pixel,
+};
 
 use std::fmt;
 

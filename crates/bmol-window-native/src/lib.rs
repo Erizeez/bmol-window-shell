@@ -11,8 +11,14 @@ use raw_window_handle::RawWindowHandle;
 ///
 /// The value is intentionally opaque and contains no borrowed `AppKit` object,
 /// so it can live alongside a graphics compositor between frames.
+pub mod linux;
+
+/// A retained identity for the native window that owns a desktop backdrop.
+///
+/// The value is intentionally opaque and contains no borrowed `AppKit` object,
+/// so it can live alongside a graphics compositor between frames.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DesktopBlurTarget(usize);
+pub struct DesktopBlurTarget(pub usize);
 
 /// Gets a native desktop-blur target from a window handle, when supported.
 #[must_use]
@@ -20,7 +26,10 @@ pub fn desktop_blur_target(handle: RawWindowHandle) -> Option<DesktopBlurTarget>
     #[cfg(target_os = "macos")]
     return macos::desktop_blur_target(handle);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    return linux::desktop_blur_target(handle);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = handle;
         None
@@ -37,7 +46,10 @@ pub fn refresh_desktop_blur(target: DesktopBlurTarget) {
     #[cfg(target_os = "macos")]
     macos::refresh_desktop_blur(target);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    linux::refresh_desktop_blur(target);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = target;
 }
 
@@ -51,7 +63,10 @@ pub fn configure_extended_dynamic_range(target: DesktopBlurTarget, enabled: bool
     #[cfg(target_os = "macos")]
     macos::configure_extended_dynamic_range(target, enabled);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    linux::configure_extended_dynamic_range(target, enabled);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = (target, enabled);
 }
 
@@ -62,7 +77,10 @@ pub fn configure_window_corner_radius(target: DesktopBlurTarget, radius: f64) {
     #[cfg(target_os = "macos")]
     macos::configure_window_corner_radius(target, radius);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    linux::configure_window_corner_radius(target, radius);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = (target, radius);
 }
 
@@ -75,7 +93,10 @@ pub fn configure_window_shadow(target: DesktopBlurTarget, has_shadow: bool) {
     #[cfg(target_os = "macos")]
     macos::configure_window_shadow(target, has_shadow);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    linux::configure_window_shadow(target, has_shadow);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = (target, has_shadow);
 }
 
@@ -99,7 +120,10 @@ pub fn configure_window_appearance(target: DesktopBlurTarget, appearance: Window
     #[cfg(target_os = "macos")]
     macos::configure_window_appearance(target, appearance);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    linux::configure_window_appearance(target, appearance);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = (target, appearance);
 }
 
@@ -109,6 +133,8 @@ pub fn configure_window_appearance(target: DesktopBlurTarget, appearance: Window
 /// `NSApplication.sharedApplication.effectiveAppearance`. This check executes in <1µs
 /// and is 100% reliable regardless of whether the window currently has focus or whether
 /// the event loop has emitted a theme change event.
+///
+/// On Linux, this inspects Desktop Portal preferences, GTK theme settings, and KDE config.
 #[must_use]
 pub fn is_system_dark_mode() -> bool {
     #[cfg(target_os = "macos")]
@@ -116,7 +142,12 @@ pub fn is_system_dark_mode() -> bool {
         macos::is_system_dark_mode()
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::is_system_dark_mode()
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         false
     }
@@ -126,6 +157,8 @@ pub fn is_system_dark_mode() -> bool {
 ///
 /// On macOS, this is hooked to the distributed notification center for
 /// `"AppleInterfaceThemeChangedNotification"`.
+///
+/// On Linux, this is hooked to theme detection state changes and portal signals.
 #[must_use]
 pub fn system_theme_change_counter() -> u64 {
     #[cfg(target_os = "macos")]
@@ -133,7 +166,12 @@ pub fn system_theme_change_counter() -> u64 {
         macos::system_theme_change_counter()
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::system_theme_change_counter()
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         0
     }

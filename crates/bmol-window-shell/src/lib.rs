@@ -16,6 +16,15 @@ pub use native::{
 pub use platform::{
     BackdropError, BackdropFrame, BackdropFrameError, BackdropRequest, BackdropSize,
     BackdropSource, ChromeDrawPlan, ChromeLayoutMode, DesktopBackdropProvider, DisplayScale,
-    Insets, Point, Rect, SidebarBackgroundConfig, SidebarBackgroundExtension, WindowChromeConfig,
-    WindowChromeMetrics, WindowConfig, WindowHitZone, traffic_lights, typography, window_rim,
+    Insets, Point, Rect, ResizeDirection, SidebarBackgroundConfig, SidebarBackgroundExtension,
+    WindowChromeConfig, WindowChromeMetrics, WindowConfig, WindowHitZone, WindowState,
+    physical_pixels_to_logical, snap_insets_to_physical, snap_to_physical_pixel, traffic_lights,
+    typography, window_rim,
 };
+
+#[cfg(feature = "iced")]
+pub mod iced_ui;
+
+#[cfg(feature = "iced")]
+pub use iced_ui::{WindowRimConfig, loyal_drag_bar, wrap_window_rim};
+

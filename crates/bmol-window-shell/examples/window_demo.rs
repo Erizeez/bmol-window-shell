@@ -10,10 +10,11 @@
 //! - SkyLight real-time blur, continuous squircle curvature, and Stage Manager re-blur protection
 
 use bmol_window_shell::{
-    ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics,
+    ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics, WindowRimConfig,
+    loyal_drag_bar, wrap_window_rim,
 };
 use iced::widget::{
-    button, column, container, mouse_area, row, scrollable, slider, space, text, toggler,
+    button, column, container, row, scrollable, slider, space, text, toggler,
 };
 use iced::window;
 use iced::{Alignment, Color, Element, Length, Padding, Size, Subscription, Task, Theme};
@@ -587,73 +588,11 @@ fn view(state: &DemoState) -> AppElement<'_> {
         LayoutSelection::UnifiedMultiPane => view_unified_multi_pane(state, plan),
     };
 
-    wrap_window_rim(content, state.is_dark(), state.corner_radius as f32)
-}
-
-/// Wraps the application root element in authentic macOS non-client rims with physical padding isolation.
-///
-/// Why physical padding isolation is mandatory:
-/// The window outer rim (1px in light mode, 2px compound in dark mode) is a non-client boundary.
-/// Without rigid padding isolation, downstream user application views (e.g. background fills,
-/// full-width toolbars, canvas, or scrollbars) would start at (0, 0) and overwrite, bleed through,
-/// or puncture the system rim.
-///
-/// By wrapping the user view inside a shell container with:
-/// - Light Mode: 1px physical padding + 1px subtle gray rim (rgba(0, 0, 0, 0.10))
-/// - Dark Mode: 1px outer black rim (padding: 1.0) + 1px inner highlight bevel (padding: 1.0), totaling 2.0px
-/// The downstream application's layout box is physically constrained strictly within the safe client area,
-/// rendering it mathematically impossible for client content to occupy or paint over the window rim.
-fn wrap_window_rim<'a>(
-    content: impl Into<AppElement<'a>>,
-    is_dark: bool,
-    outer_radius: f32,
-) -> AppElement<'a> {
-    if is_dark {
-        // Authentic macOS Dark Mode: Dual-layer compound rim (2px total physical width)
-        // 1. Inner Layer: 1px subtle gray line (rgb(70, 70, 70)) with 1px padding
-        let inner_window = container(content.into())
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(1.0)
-            .style(move |_theme| container::Style {
-                border: iced::Border {
-                    color: Color::from_rgb8(70, 70, 70),
-                    width: 1.0,
-                    radius: (outer_radius - 1.0).max(0.0).into(),
-                },
-                ..Default::default()
-            });
-
-        // 2. Outer Layer: 1px deep black delineation rim (rgba(0.0, 0.0, 0.0, 0.85)) with 1px padding
-        container(inner_window)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(1.0)
-            .style(move |_theme| container::Style {
-                border: iced::Border {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.85),
-                    width: 1.0,
-                    radius: outer_radius.into(),
-                },
-                ..Default::default()
-            })
-            .into()
-    } else {
-        // Authentic macOS Light Mode: Single-layer 1px subtle gray outer rim (rgba(0.0, 0.0, 0.0, 0.10)) with 1px padding
-        container(content.into())
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(1.0)
-            .style(move |_theme| container::Style {
-                border: iced::Border {
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.10),
-                    width: 1.0,
-                    radius: outer_radius.into(),
-                },
-                ..Default::default()
-            })
-            .into()
-    }
+    wrap_window_rim(
+        content,
+        WindowRimConfig::new(state.is_dark())
+            .with_corner_radius(state.corner_radius as f32),
+    )
 }
 
 // =========================================================================
@@ -752,30 +691,6 @@ fn view_theme_toggle(state: &DemoState) -> AppElement<'_> {
     .into()
 }
 
-/// A transparent, non-intrusive draggable header bar for custom window chromes.
-///
-/// It performs one single, faithful duty:
-/// Visual effects, background styling, and interactive controls are completely owned
-/// and placed by the downstream application. If the user clicks or drags any background
-/// portion or gaps beneath the widgets, it faithfully initiates window dragging; if the
-/// click hits an interactive widget, the widget naturally consumes the event.
-fn loyal_drag_bar<'a>(
-    height: f32,
-    content: impl Into<AppElement<'a>>,
-) -> AppElement<'a> {
-    mouse_area(
-        container(content.into())
-            .width(Length::Fill)
-            .height(Length::Fixed(height))
-            .style(|_theme| container::Style {
-                background: None,
-                ..Default::default()
-            }),
-    )
-    .on_press(Message::DragWindow)
-    .on_double_click(Message::ToggleMaximize)
-    .into()
-}
 
 fn view_layout_toggle(state: &DemoState) -> AppElement<'_> {
     let make_item = |label: &'static str, layout: LayoutSelection| {
@@ -942,9 +857,12 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
     .height(Length::Fixed(titlebar_height))
     .width(Length::Fill);
 
-    let draggable_titlebar = mouse_area(titlebar_content)
-        .on_press(Message::DragWindow)
-        .on_double_click(Message::ToggleMaximize);
+    let draggable_titlebar = loyal_drag_bar(
+        titlebar_height,
+        titlebar_content,
+        Message::DragWindow,
+        Some(Message::ToggleMaximize),
+    );
 
     let titlebar_container = container(draggable_titlebar)
         .style(move |_theme| container::Style {
@@ -1102,7 +1020,12 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
     .height(Length::Fixed(header_height))
     .width(Length::Fill);
 
-    let draggable_header = loyal_drag_bar(header_height, header_content);
+    let draggable_header = loyal_drag_bar(
+        header_height,
+        header_content,
+        Message::DragWindow,
+        Some(Message::ToggleMaximize),
+    );
 
     // 2. Full-width content body (Single Pane Canvas)
     let main_body = view_content_cards(state);
@@ -1157,7 +1080,12 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
     .height(Length::Fixed(header_height))
     .width(Length::Fill);
 
-    let draggable_sidebar_header = loyal_drag_bar(header_height, sidebar_header_content);
+    let draggable_sidebar_header = loyal_drag_bar(
+        header_height,
+        sidebar_header_content,
+        Message::DragWindow,
+        Some(Message::ToggleMaximize),
+    );
 
     let sidebar_body = column![
         text("NAVIGATION")
@@ -1263,7 +1191,12 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
     .height(Length::Fixed(header_height))
     .width(Length::Fill);
 
-    let draggable_top_toolbar = loyal_drag_bar(header_height, top_toolbar_content);
+    let draggable_top_toolbar = loyal_drag_bar(
+        header_height,
+        top_toolbar_content,
+        Message::DragWindow,
+        Some(Message::ToggleMaximize),
+    );
 
     let main_body = view_content_cards(state);
 

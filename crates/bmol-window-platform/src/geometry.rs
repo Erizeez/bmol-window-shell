@@ -146,6 +146,13 @@ pub struct Insets {
 }
 
 impl Insets {
+    pub const ZERO: Self = Self {
+        top: 0.0,
+        right: 0.0,
+        bottom: 0.0,
+        left: 0.0,
+    };
+
     #[must_use]
     pub const fn new(top: f32, right: f32, bottom: f32, left: f32) -> Self {
         Self { top, right, bottom, left }
@@ -164,6 +171,51 @@ impl Insets {
             bottom: vertical,
             left: horizontal,
         }
+    }
+}
+
+/// The semantic direction of a window edge or corner for resizing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResizeDirection {
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// Snaps a logical coordinate value to physical pixel boundaries given a display scale factor.
+///
+/// Under fractional scaling (e.g. 1.25x or 1.5x on Linux / Wayland), rounding to the nearest
+/// physical pixel prevents subpixel antialiasing blur on crisp 1px / 2px borders.
+#[must_use]
+pub fn snap_to_physical_pixel(logical_value: f32, scale_factor: f32) -> f32 {
+    if scale_factor <= 0.0 {
+        return logical_value;
+    }
+    (logical_value * scale_factor).round() / scale_factor
+}
+
+/// Returns the thickness in logical points that corresponds to exactly `pixels` physical pixels under `scale_factor`.
+#[must_use]
+pub fn physical_pixels_to_logical(pixels: u32, scale_factor: f32) -> f32 {
+    if scale_factor <= 0.0 {
+        return pixels as f32;
+    }
+    (pixels as f32) / scale_factor
+}
+
+/// Snaps all four margins of an Insets struct to physical pixel boundaries.
+#[must_use]
+pub fn snap_insets_to_physical(insets: Insets, scale_factor: f32) -> Insets {
+    Insets {
+        top: snap_to_physical_pixel(insets.top, scale_factor),
+        right: snap_to_physical_pixel(insets.right, scale_factor),
+        bottom: snap_to_physical_pixel(insets.bottom, scale_factor),
+        left: snap_to_physical_pixel(insets.left, scale_factor),
     }
 }
 
@@ -196,5 +248,22 @@ mod tests {
         let c = Rect::new(60.0, 60.0, 10.0, 10.0);
         assert!(a.intersects(&b));
         assert!(!a.intersects(&c));
+    }
+
+    #[test]
+    fn test_snap_to_physical_pixel() {
+        // Standard 2x Retina
+        assert_eq!(snap_to_physical_pixel(1.0, 2.0), 1.0);
+        assert_eq!(snap_to_physical_pixel(1.24, 2.0), 1.0);
+        assert_eq!(snap_to_physical_pixel(1.26, 2.0), 1.5);
+
+        // 1 physical pixel under 2x Retina is 0.5 points
+        assert_eq!(physical_pixels_to_logical(1, 2.0), 0.5);
+        // 2 physical pixels under 2x Retina is 1.0 point
+        assert_eq!(physical_pixels_to_logical(2, 2.0), 1.0);
+
+        let insets = Insets::uniform(1.0);
+        let snapped = snap_insets_to_physical(insets, 2.0);
+        assert_eq!(snapped, Insets::uniform(1.0));
     }
 }

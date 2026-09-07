@@ -138,10 +138,23 @@ impl ChromeLayoutMode {
     }
 }
 
+/// The window state (normal floating window, maximized, or native fullscreen).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum WindowState {
+    #[default]
+    Normal,
+    Maximized,
+    Fullscreen,
+}
+
 /// Configuration parameters for window chrome calculation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WindowChromeConfig {
     pub mode: ChromeLayoutMode,
+    /// The window state (normal, maximized, or native fullscreen).
+    pub state: WindowState,
+    /// Display scale factor (e.g. 2.0 for Retina, 1.25/1.5 for Linux fractional scaling).
+    pub scale_factor: f32,
     /// Distance from the window left edge to the traffic lights.
     pub traffic_lights_leading: f32,
     /// Custom vertical offset for traffic lights, or None for automatic vertical centering.
@@ -154,6 +167,8 @@ impl Default for WindowChromeConfig {
     fn default() -> Self {
         Self {
             mode: ChromeLayoutMode::unified_default(Some(220.0)),
+            state: WindowState::Normal,
+            scale_factor: 1.0,
             traffic_lights_leading: traffic_lights::LEADING_MARGIN,
             traffic_lights_top_offset: None,
             toolbar_action_reserved_width: 160.0,
@@ -166,6 +181,8 @@ impl WindowChromeConfig {
     pub const fn separate(titlebar_height: f32) -> Self {
         Self {
             mode: ChromeLayoutMode::Separate { titlebar_height },
+            state: WindowState::Normal,
+            scale_factor: 1.0,
             traffic_lights_leading: traffic_lights::LEADING_MARGIN,
             traffic_lights_top_offset: None,
             toolbar_action_reserved_width: 140.0,
@@ -179,6 +196,8 @@ impl WindowChromeConfig {
                 header_height,
                 sidebar_width,
             },
+            state: WindowState::Normal,
+            scale_factor: 1.0,
             traffic_lights_leading: traffic_lights::LEADING_MARGIN,
             traffic_lights_top_offset: None,
             toolbar_action_reserved_width: 160.0,
@@ -194,6 +213,20 @@ impl WindowChromeConfig {
     #[must_use]
     pub const fn unified_header(header_height: f32) -> Self {
         Self::unified(header_height, None)
+    }
+
+    /// Configures the window state (Normal, Maximized, Fullscreen).
+    #[must_use]
+    pub const fn with_state(mut self, state: WindowState) -> Self {
+        self.state = state;
+        self
+    }
+
+    /// Configures the display scale factor (e.g. 2.0 for Retina, 1.25/1.5 for fractional DPI).
+    #[must_use]
+    pub const fn with_scale_factor(mut self, scale_factor: f32) -> Self {
+        self.scale_factor = scale_factor;
+        self
     }
 }
 
@@ -231,8 +264,12 @@ pub struct WindowChromeMetrics {
     pub window_size: (f32, f32),
     /// Active layout mode.
     pub mode: ChromeLayoutMode,
+    /// Active window state (Normal, Maximized, Fullscreen).
+    pub state: WindowState,
+    /// Active display scale factor.
+    pub scale_factor: f32,
 
-    /// Non-client window rim insets (1.0 px light mode, 2.0 px dark mode).
+    /// Non-client window rim insets (1.0 px light mode, 2.0 px dark mode; 0.0 in fullscreen).
     pub rim_insets: Insets,
     /// Safe client rectangle strictly inside the window rim.
     /// Downstream application views MUST be contained within this rectangle.
@@ -290,7 +327,17 @@ impl WindowChromeMetrics {
         let width = window_width.max(1.0);
         let height = window_height.max(1.0);
 
-        let rim_insets = window_rim::insets(is_dark);
+        // In fullscreen mode, outer non-client rims automatically collapse to zero
+        let rim_insets = if config.state == WindowState::Fullscreen {
+            Insets::ZERO
+        } else {
+            let base_insets = window_rim::insets(is_dark);
+            if config.scale_factor > 0.0 {
+                crate::geometry::snap_insets_to_physical(base_insets, config.scale_factor)
+            } else {
+                base_insets
+            }
+        };
         let safe_client_rect = Rect::new(0.0, 0.0, width, height).insets(rim_insets);
 
         let header_h = config.mode.header_height().min(height);
@@ -347,6 +394,8 @@ impl WindowChromeMetrics {
                 Self {
                     window_size: (width, height),
                     mode: config.mode,
+                    state: config.state,
+                    scale_factor: config.scale_factor,
                     rim_insets,
                     safe_client_rect,
                     traffic_lights_hitbox,
@@ -386,6 +435,8 @@ impl WindowChromeMetrics {
                 Self {
                     window_size: (width, height),
                     mode: config.mode,
+                    state: config.state,
+                    scale_factor: config.scale_factor,
                     rim_insets,
                     safe_client_rect,
                     traffic_lights_hitbox,
@@ -458,6 +509,41 @@ impl WindowChromeMetrics {
     #[must_use]
     pub fn is_in_traffic_lights_exclusion(&self, px: f32, py: f32) -> bool {
         self.traffic_lights_exclusion_zone.contains(px, py)
+    }
+
+    /// Returns the resize direction if the given coordinate falls on a window rim edge or corner.
+    #[must_use]
+    pub fn hit_test_resize_direction(&self, px: f32, py: f32) -> Option<crate::geometry::ResizeDirection> {
+        use crate::geometry::ResizeDirection;
+        if self.hit_test(px, py) != WindowHitZone::WindowRim {
+            return None;
+        }
+
+        let corner_slop = 12.0_f32;
+        let is_left = px <= (self.rim_insets.left + corner_slop);
+        let is_right = px >= (self.window_size.0 - self.rim_insets.right - corner_slop);
+        let is_top = py <= (self.rim_insets.top + corner_slop);
+        let is_bottom = py >= (self.window_size.1 - self.rim_insets.bottom - corner_slop);
+
+        if is_top && is_left {
+            Some(ResizeDirection::TopLeft)
+        } else if is_top && is_right {
+            Some(ResizeDirection::TopRight)
+        } else if is_bottom && is_left {
+            Some(ResizeDirection::BottomLeft)
+        } else if is_bottom && is_right {
+            Some(ResizeDirection::BottomRight)
+        } else if is_top {
+            Some(ResizeDirection::Top)
+        } else if is_bottom {
+            Some(ResizeDirection::Bottom)
+        } else if is_left {
+            Some(ResizeDirection::Left)
+        } else if is_right {
+            Some(ResizeDirection::Right)
+        } else {
+            None
+        }
     }
 }
 
@@ -634,5 +720,34 @@ mod tests {
         // Outside window bounds
         assert_eq!(dark_metrics.hit_test(-1.0, 10.0), WindowHitZone::Outside);
         assert_eq!(dark_metrics.hit_test(801.0, 10.0), WindowHitZone::Outside);
+    }
+
+    #[test]
+    fn test_fullscreen_rim_collapse() {
+        let config = WindowChromeConfig::unified_header(40.0)
+            .with_state(WindowState::Fullscreen);
+        let dark_metrics = WindowChromeMetrics::compute_with_theme(1920.0, 1080.0, &config, true);
+
+        // Fullscreen should collapse rim insets to ZERO
+        assert_eq!(dark_metrics.rim_insets, Insets::ZERO);
+        assert_eq!(dark_metrics.safe_client_rect, Rect::new(0.0, 0.0, 1920.0, 1080.0));
+    }
+
+    #[test]
+    fn test_hit_test_resize_direction() {
+        use crate::geometry::ResizeDirection;
+        let config = WindowChromeConfig::separate(32.0);
+        let metrics = WindowChromeMetrics::compute_with_theme(800.0, 600.0, &config, true);
+
+        // Top-left corner
+        assert_eq!(metrics.hit_test_resize_direction(0.5, 0.5), Some(ResizeDirection::TopLeft));
+        // Top edge
+        assert_eq!(metrics.hit_test_resize_direction(400.0, 0.5), Some(ResizeDirection::Top));
+        // Bottom-right corner
+        assert_eq!(metrics.hit_test_resize_direction(799.0, 599.0), Some(ResizeDirection::BottomRight));
+        // Right edge
+        assert_eq!(metrics.hit_test_resize_direction(799.5, 300.0), Some(ResizeDirection::Right));
+        // Inside window content returns None
+        assert_eq!(metrics.hit_test_resize_direction(400.0, 300.0), None);
     }
 }
