@@ -1793,8 +1793,8 @@ dependencies = [
 
 [[package]]
 name = "macos-typography"
-version = "0.1.1"
-source = "git+https://github.com/Erizeez/macos-fonts.git?tag=v0.1.1#8ef327508493836a7f195026a143b83a7c9e8b0e"
+version = "0.1.2"
+source = "git+https://github.com/Erizeez/macos-fonts.git?tag=v0.1.2#ce37b7cd8f3ac1765fda3a65787b352b2f756860"
 dependencies = [
  "iced_core",
 ]

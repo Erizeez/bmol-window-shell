@@ -33,7 +33,9 @@ use window_controls::{
 
 type AppElement<'a> = Element<'a, Message, Theme, Renderer>;
 
-pub use macos_typography::{APPLE_HEADER_FONT, APPLE_TITLEBAR_FONT};
+pub use macos_typography::{
+    APPLE_HEADER_FONT, APPLE_TITLEBAR_FONT, APPLE_TITLEBAR_FONT_SIZE,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LayoutSelection {
@@ -857,9 +859,9 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
         view_traffic_lights(state),
         // 3. Exactly 16px clearance between traffic lights and title (10px + 6px slop = 16px)
         column![].width(Length::Fixed(10.0)),
-        // 4. Left-aligned title text (Apple standard 13pt SF Pro / PingFang SC Regular 400)
+        // 4. Left-aligned title text (Apple standard Bold, letter 'a' height ~8px at 14.5pt)
         text("BMOL Window Shell")
-            .size(13)
+            .size(APPLE_TITLEBAR_FONT_SIZE)
             .font(APPLE_TITLEBAR_FONT)
             .color(title_color),
         // 5. Flexible horizontal space in the center
@@ -1819,7 +1821,7 @@ mod tests {
         let mut fs = font_system.write().unwrap();
         let db = fs.raw().db();
 
-        assert_eq!(APPLE_TITLEBAR_FONT.weight, iced::font::Weight::Normal);
+        assert_eq!(APPLE_TITLEBAR_FONT.weight, iced::font::Weight::Bold);
 
         // Ensure macOS system font or PingFang is available in the font database
         let mut has_apple_or_fallback = false;
