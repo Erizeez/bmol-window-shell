@@ -1,643 +1,574 @@
-//! Complete macOS-style Window Replication Demo.
+//! Complete authentic macOS Window Demo.
 //!
-//! Replicates an authentic macOS application window using `bmol-window-shell`:
-//! - Real-time SkyLight desktop background blur through a transparent window frame
-//! - Interactive traffic lights (Close / Minimize / Zoom) with active/inactive states and hover glyphs
-//! - Native titlebar dragging and double-click maximize/restore
-//! - Continuous squircle corner clipping
-//! - Structured macOS split-view layout: frosted sidebar, search pill, and settings cards.
+//! Replicates an authentic macOS application window:
+//! - Native macOS traffic lights with transparent titlebar and fullsize content view
+//! - bmol-window-shell SkyLight compositor blur, continuous corner radius, EDR, and Stage Manager guard
+//! - Vector typography rendered with modern antialiased text
+//! - Authentic macOS dual-pane layout: frosted sidebar and structured settings cards
 
-use std::{num::NonZeroU32, sync::Arc, time::Instant};
+use iced::widget::{button, column, container, row, scrollable, slider, space, text, toggler};
+use iced::window;
+use iced::{Alignment, Color, Element, Length, Padding, Size, Subscription, Task, Theme};
 
-use bmol_window_shell::{
-    configure_extended_dynamic_range, configure_window_corner_radius, desktop_blur_target,
-    install_stage_manager_guard, refresh_desktop_blur,
-};
-use raw_window_handle::HasWindowHandle;
-use softbuffer::{Context, Surface};
-use winit::{
-    application::ApplicationHandler,
-    dpi::LogicalSize,
-    event::{ElementState, MouseButton, WindowEvent},
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    keyboard::{Key, NamedKey},
-    window::{Fullscreen, Window, WindowId},
-};
-
-const WINDOW_CORNER_RADIUS: f64 = 16.0;
-const SIDEBAR_WIDTH: u32 = 210;
-const TITLEBAR_HEIGHT: u32 = 52;
-
-// Traffic light geometry
-const TL_RADIUS: f32 = 6.0;
-const TL_Y: f32 = 26.0;
-const TL_CLOSE_X: f32 = 20.0;
-const TL_MIN_X: f32 = 40.0;
-const TL_ZOOM_X: f32 = 60.0;
-
-#[derive(Default)]
-struct App {
-    window: Option<Arc<Window>>,
-    surface: Option<Surface<Arc<Window>, Arc<Window>>>,
-    mouse_pos: (f32, f32),
-    is_focused: bool,
-    last_click_time: Option<Instant>,
-    toggle_state: bool,
+#[derive(Debug, Clone)]
+enum Message {
+    WindowOpened(window::Id),
+    TabSelected(usize),
+    ToggleBlur(bool),
+    ToggleEdr(bool),
+    ToggleGuard(bool),
+    CornerRadiusChanged(f64),
+    OpacityChanged(f32),
+    ResetDefaults,
 }
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_some() {
-            return;
+#[derive(Debug)]
+struct DemoState {
+    window_id: Option<window::Id>,
+    active_tab: usize,
+    blur_enabled: bool,
+    edr_enabled: bool,
+    guard_enabled: bool,
+    corner_radius: f64,
+    opacity: f32,
+    native_attached: bool,
+}
+
+impl Default for DemoState {
+    fn default() -> Self {
+        Self {
+            window_id: None,
+            active_tab: 0,
+            blur_enabled: true,
+            edr_enabled: true,
+            guard_enabled: true,
+            corner_radius: 16.0,
+            opacity: 0.88,
+            native_attached: false,
         }
-
-        let attributes = Window::default_attributes()
-            .with_title("BMOL macOS Window Shell Demo")
-            .with_inner_size(LogicalSize::new(880.0, 560.0))
-            .with_min_inner_size(LogicalSize::new(640.0, 420.0))
-            .with_transparent(true)
-            .with_decorations(false); // Seamless frameless
-
-        let window = Arc::new(event_loop.create_window(attributes).expect("create window"));
-
-        // Connect softbuffer surface
-        let context = Context::new(window.clone()).expect("create softbuffer context");
-        let surface = Surface::new(&context, window.clone()).expect("create softbuffer surface");
-
-        // Apply native macOS window modifications via bmol-window-shell
-        if let Ok(handle) = window.window_handle() {
-            if let Some(target) = desktop_blur_target(handle.as_raw()) {
-                refresh_desktop_blur(target);
-                install_stage_manager_guard(target);
-                configure_extended_dynamic_range(target, true);
-                configure_window_corner_radius(target, WINDOW_CORNER_RADIUS);
-            }
-        }
-
-        self.window = Some(window);
-        self.surface = Some(surface);
-        self.is_focused = true;
-        self.toggle_state = true;
     }
+}
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let Some(window) = self.window.as_ref() else { return };
+fn boot() -> (DemoState, Task<Message>) {
+    (DemoState::default(), Task::none())
+}
 
-        match event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            WindowEvent::Focused(focused) => {
-                self.is_focused = focused;
-                window.request_redraw();
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                let scale = window.scale_factor();
-                self.mouse_pos = (
-                    (position.x / scale) as f32,
-                    (position.y / scale) as f32,
-                );
-                window.request_redraw();
-            }
-            WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } => {
-                let (mx, my) = self.mouse_pos;
+fn update(state: &mut DemoState, message: Message) -> Task<Message> {
+    match message {
+        Message::WindowOpened(id) => {
+            state.window_id = Some(id);
+            state.native_attached = true;
+            let radius = state.corner_radius;
+            let edr = state.edr_enabled;
 
-                // 1. Check traffic lights click
-                if (mx - TL_CLOSE_X).hypot(my - TL_Y) <= TL_RADIUS + 2.0 {
-                    event_loop.exit();
-                    return;
-                }
-                if (mx - TL_MIN_X).hypot(my - TL_Y) <= TL_RADIUS + 2.0 {
-                    window.set_minimized(true);
-                    return;
-                }
-                if (mx - TL_ZOOM_X).hypot(my - TL_Y) <= TL_RADIUS + 2.0 {
-                    if window.fullscreen().is_some() {
-                        window.set_fullscreen(None);
-                    } else {
-                        window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+            window::run(id, move |w| {
+                if let Ok(handle) = w.window_handle() {
+                    let rwh = handle.as_raw();
+                    if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                        bmol_window_shell::install_stage_manager_guard(target);
+                        bmol_window_shell::configure_window_corner_radius(target, radius);
+                        bmol_window_shell::configure_extended_dynamic_range(target, edr);
+                        bmol_window_shell::refresh_desktop_blur(target);
                     }
-                    return;
                 }
-
-                // 2. Check toggle switch click in main card
-                let size = window.inner_size();
-                let scale = window.scale_factor() as f32;
-                let logical_w = size.width as f32 / scale;
-                let toggle_x = logical_w - 74.0;
-                let toggle_y = 338.0;
-                if mx >= toggle_x - 6.0 && mx <= toggle_x + 36.0 && my >= toggle_y - 6.0 && my <= toggle_y + 22.0 {
-                    self.toggle_state = !self.toggle_state;
-                    window.request_redraw();
-                    return;
-                }
-
-                // 3. Titlebar dragging or double-click maximize
-                if my <= TITLEBAR_HEIGHT as f32 && mx > 80.0 {
-                    let now = Instant::now();
-                    if let Some(prev) = self.last_click_time {
-                        if now.duration_since(prev).as_millis() < 300 {
-                            // Double click: toggle maximize
-                            let is_max = window.is_maximized();
-                            window.set_maximized(!is_max);
-                            self.last_click_time = None;
-                            return;
+            })
+            .discard()
+        }
+        Message::TabSelected(tab) => {
+            state.active_tab = tab;
+            Task::none()
+        }
+        Message::ToggleBlur(enabled) => {
+            state.blur_enabled = enabled;
+            if let Some(id) = state.window_id {
+                window::run(id, move |w| {
+                    if let Ok(handle) = w.window_handle() {
+                        let rwh = handle.as_raw();
+                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                            if enabled {
+                                bmol_window_shell::refresh_desktop_blur(target);
+                            }
                         }
                     }
-                    self.last_click_time = Some(now);
-
-                    // Native window drag
-                    let _ = window.drag_window();
-                }
-            }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
-                if let Key::Named(NamedKey::Escape) = key_event.logical_key {
-                    event_loop.exit();
-                } else if let Key::Character(ref ch) = key_event.logical_key {
-                    if ch == "q" || ch == "Q" {
-                        event_loop.exit();
-                    }
-                }
-            }
-            WindowEvent::RedrawRequested => {
-                self.render();
-            }
-            WindowEvent::Resized(_) => {
-                window.request_redraw();
-            }
-            _ => {}
-        }
-    }
-}
-
-impl App {
-    fn render(&mut self) {
-        let Some(window) = self.window.as_ref() else { return };
-        let Some(surface) = self.surface.as_mut() else { return };
-
-        let size = window.inner_size();
-        let Some(w) = NonZeroU32::new(size.width) else { return };
-        let Some(h) = NonZeroU32::new(size.height) else { return };
-
-        surface.resize(w, h).expect("resize surface");
-        let mut buffer = surface.buffer_mut().expect("get surface buffer");
-
-        let width = size.width;
-        let height = size.height;
-        let scale = window.scale_factor() as f32;
-
-        let logical_w = width as f32 / scale;
-        let logical_h = height as f32 / scale;
-
-        // Clear buffer with 0
-        buffer.fill(0);
-
-        // Render macOS split-view layout
-        let (mx, my) = self.mouse_pos;
-        let is_tl_hovered = self.is_focused && mx <= 80.0 && my <= TITLEBAR_HEIGHT as f32;
-
-        let mut painter = Painter {
-            buffer: &mut buffer,
-            width: width as usize,
-            height: height as usize,
-            scale,
-        };
-
-        // 1. Draw Sidebar Background (Frosted translucent wash)
-        // macOS settings sidebar: neutral translucent wash over SkyLight blur
-        painter.fill_rect(
-            0.0,
-            0.0,
-            SIDEBAR_WIDTH as f32,
-            logical_h,
-            if self.is_focused { 0x30FFFFFF } else { 0x20FFFFFF },
-        );
-
-        // 2. Draw Content Pane Background (slightly warmer/whiter translucent layer)
-        painter.fill_rect(
-            SIDEBAR_WIDTH as f32,
-            0.0,
-            logical_w - SIDEBAR_WIDTH as f32,
-            logical_h,
-            if self.is_focused { 0xDDF6F6F8 } else { 0xCEF0F0F2 },
-        );
-
-        // 3. Draw Vertical Divider between sidebar and content
-        painter.fill_rect(
-            SIDEBAR_WIDTH as f32 - 0.5,
-            0.0,
-            1.0,
-            logical_h,
-            0x18000000,
-        );
-
-        // 4. Draw Traffic Lights
-        let (close_c, min_c, zoom_c) = if !self.is_focused {
-            (0xFF4E4E52, 0xFF4E4E52, 0xFF4E4E52) // macOS inactive gray
-        } else {
-            (0xFFFF5F56, 0xFFFFBD2E, 0xFF27C93F) // macOS active vibrant red, yellow, green
-        };
-
-        painter.draw_circle(TL_CLOSE_X, TL_Y, TL_RADIUS, close_c);
-        painter.draw_circle(TL_MIN_X, TL_Y, TL_RADIUS, min_c);
-        painter.draw_circle(TL_ZOOM_X, TL_Y, TL_RADIUS, zoom_c);
-
-        // If hovered, draw internal glyphs
-        if is_tl_hovered {
-            painter.draw_close_glyph(TL_CLOSE_X, TL_Y, 0x884D0000);
-            painter.draw_minimize_glyph(TL_MIN_X, TL_Y, 0x88995700);
-            painter.draw_zoom_glyph(TL_ZOOM_X, TL_Y, 0x88006500);
-        }
-
-        // 5. Draw Sidebar Content
-        // Search Pill
-        painter.draw_rounded_rect(16.0, 48.0, SIDEBAR_WIDTH as f32 - 32.0, 26.0, 6.0, 0x14000000);
-        painter.draw_text("Search...", 32.0, 55.0, 0x55000000);
-
-        // Sidebar Items
-        let sidebar_items = [
-            ("General", true),
-            ("Appearance", false),
-            ("Displays", false),
-            ("Sound", false),
-            ("Focus", false),
-            ("Battery", false),
-        ];
-
-        let mut item_y = 88.0;
-        for (label, selected) in sidebar_items {
-            if selected {
-                // Selected blue pill
-                painter.draw_rounded_rect(
-                    12.0,
-                    item_y,
-                    SIDEBAR_WIDTH as f32 - 24.0,
-                    28.0,
-                    6.0,
-                    0xFF0A7AFF, // macOS accent blue
-                );
-                painter.draw_text(label, 26.0, item_y + 8.0, 0xFFFFFFFF);
+                })
+                .discard()
             } else {
-                painter.draw_text(label, 26.0, item_y + 8.0, 0xCC1A1A1A);
+                Task::none()
             }
-            item_y += 34.0;
         }
+        Message::ToggleEdr(enabled) => {
+            state.edr_enabled = enabled;
+            if let Some(id) = state.window_id {
+                window::run(id, move |w| {
+                    if let Ok(handle) = w.window_handle() {
+                        let rwh = handle.as_raw();
+                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                            bmol_window_shell::configure_extended_dynamic_range(target, enabled);
+                        }
+                    }
+                })
+                .discard()
+            } else {
+                Task::none()
+            }
+        }
+        Message::ToggleGuard(enabled) => {
+            state.guard_enabled = enabled;
+            if enabled && let Some(id) = state.window_id {
+                window::run(id, |w| {
+                    if let Ok(handle) = w.window_handle() {
+                        let rwh = handle.as_raw();
+                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                            bmol_window_shell::install_stage_manager_guard(target);
+                        }
+                    }
+                })
+                .discard()
+            } else {
+                Task::none()
+            }
+        }
+        Message::CornerRadiusChanged(radius) => {
+            state.corner_radius = radius;
+            if let Some(id) = state.window_id {
+                window::run(id, move |w| {
+                    if let Ok(handle) = w.window_handle() {
+                        let rwh = handle.as_raw();
+                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                            bmol_window_shell::configure_window_corner_radius(target, radius);
+                        }
+                    }
+                })
+                .discard()
+            } else {
+                Task::none()
+            }
+        }
+        Message::OpacityChanged(opacity) => {
+            state.opacity = opacity;
+            Task::none()
+        }
+        Message::ResetDefaults => {
+            state.blur_enabled = true;
+            state.edr_enabled = true;
+            state.guard_enabled = true;
+            state.corner_radius = 16.0;
+            state.opacity = 0.88;
+            if let Some(id) = state.window_id {
+                window::run(id, move |w| {
+                    if let Ok(handle) = w.window_handle() {
+                        let rwh = handle.as_raw();
+                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                            bmol_window_shell::configure_window_corner_radius(target, 16.0);
+                            bmol_window_shell::configure_extended_dynamic_range(target, true);
+                            bmol_window_shell::refresh_desktop_blur(target);
+                        }
+                    }
+                })
+                .discard()
+            } else {
+                Task::none()
+            }
+        }
+    }
+}
 
-        // 6. Draw Content Area (General Settings View)
-        // Window Title & Toolbar
-        painter.draw_text("General", SIDEBAR_WIDTH as f32 + 32.0, 22.0, 0xEE111111);
+fn subscription(_state: &DemoState) -> Subscription<Message> {
+    window::open_events().map(Message::WindowOpened)
+}
 
-        // Section Heading
-        painter.draw_text_large("General", SIDEBAR_WIDTH as f32 + 32.0, 64.0, 0xFF111111);
+fn view(state: &DemoState) -> Element<'_, Message> {
+    let sidebar = view_sidebar(state);
+    let content = view_content(state);
 
-        // Settings Card 1: System Info
-        let card_x = SIDEBAR_WIDTH as f32 + 32.0;
-        let card_w = (logical_w - card_x - 36.0).max(320.0);
+    row![sidebar, content].width(Length::Fill).height(Length::Fill).into()
+}
 
-        painter.draw_rounded_rect(card_x, 100.0, card_w, 114.0, 10.0, 0xFAFFFFFF);
-        painter.draw_rounded_rect_border(card_x, 100.0, card_w, 114.0, 10.0, 0x10000000);
+fn view_sidebar(state: &DemoState) -> Element<'_, Message> {
+    let tabs = [
+        ("General", "Window appearance and shell configuration"),
+        ("Display & EDR", "Metal layer extended dynamic range"),
+        ("Stage Manager", "Compositor blur preservation guard"),
+        ("Diagnostics", "Native window handle and surface inspect"),
+    ];
 
-        painter.draw_text("About", card_x + 16.0, 112.0, 0xEE1A1A1A);
-        painter.draw_text("macOS Sequoia — 15.0", card_x + card_w - 150.0, 112.0, 0x66000000);
+    let mut nav_col = column![].spacing(6).width(Length::Fill);
 
-        painter.fill_rect(card_x + 16.0, 137.0, card_w - 32.0, 1.0, 0x0C000000);
+    for (index, (title, _desc)) in tabs.iter().enumerate() {
+        let is_selected = state.active_tab == index;
 
-        painter.draw_text("Software Update", card_x + 16.0, 149.0, 0xEE1A1A1A);
-        painter.draw_text("Up to date", card_x + card_w - 88.0, 149.0, 0x66000000);
+        let item_btn = button(
+            row![
+                text(if is_selected { "●" } else { "○" }).size(12),
+                text(*title).size(13)
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        )
+        .padding([8, 12])
+        .width(Length::Fill)
+        .on_press(Message::TabSelected(index))
+        .style(move |_theme, status| {
+            if is_selected {
+                button::Style {
+                    background: Some(Color::from_rgba(0.2, 0.45, 0.9, 0.28).into()),
+                    text_color: Color::from_rgb(0.3, 0.7, 1.0),
+                    border: iced::Border {
+                        color: Color::from_rgba(0.3, 0.6, 1.0, 0.4),
+                        width: 1.0,
+                        radius: 8.0.into(),
+                    },
+                    ..Default::default()
+                }
+            } else {
+                let hover = matches!(status, button::Status::Hovered);
+                button::Style {
+                    background: if hover {
+                        Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into())
+                    } else {
+                        None
+                    },
+                    text_color: if hover {
+                        Color::from_rgb(0.9, 0.9, 0.9)
+                    } else {
+                        Color::from_rgb(0.65, 0.65, 0.68)
+                    },
+                    border: iced::Border {
+                        radius: 8.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }
+            }
+        });
 
-        painter.fill_rect(card_x + 16.0, 175.0, card_w - 32.0, 1.0, 0x0C000000);
+        nav_col = nav_col.push(item_btn);
+    }
 
-        painter.draw_text("Storage", card_x + 16.0, 187.0, 0xEE1A1A1A);
-        painter.draw_text("Macintosh HD", card_x + card_w - 96.0, 187.0, 0x66000000);
+    let status_pill = container(
+        column![
+            text("bmol-window-shell").size(11).color(Color::from_rgb(0.5, 0.5, 0.55)),
+            row![
+                text(if state.native_attached { "● Native Attached" } else { "○ Initializing" })
+                    .size(11)
+                    .color(if state.native_attached {
+                        Color::from_rgb(0.2, 0.8, 0.4)
+                    } else {
+                        Color::from_rgb(0.8, 0.5, 0.2)
+                    }),
+            ],
+        ]
+        .spacing(4),
+    )
+    .padding([8, 12])
+    .style(|_theme| container::Style {
+        background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.25).into()),
+        border: iced::Border {
+            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+            width: 1.0,
+            radius: 8.0.into(),
+        },
+        ..Default::default()
+    });
 
-        // Settings Card 2: Shell & Vibrancy
-        painter.draw_rounded_rect(card_x, 230.0, card_w, 150.0, 10.0, 0xFAFFFFFF);
-        painter.draw_rounded_rect_border(card_x, 230.0, card_w, 150.0, 10.0, 0x10000000);
+    let sidebar_body = column![
+        // Space reserved for native macOS Traffic Lights (top left)
+        column![].height(Length::Fixed(48.0)),
+        text("SETTINGS").size(11).color(Color::from_rgb(0.5, 0.5, 0.55)),
+        nav_col,
+        column![].height(Length::Fill),
+        status_pill,
+    ]
+    .padding([16, 16])
+    .spacing(12)
+    .width(Length::Fixed(220.0))
+    .height(Length::Fill);
 
-        painter.draw_text("SkyLight Background Blur", card_x + 16.0, 244.0, 0xEE1A1A1A);
-        painter.draw_text("Active (CGS)", card_x + card_w - 94.0, 244.0, 0xFF34C759);
+    container(sidebar_body)
+        .style(|_theme| container::Style {
+            background: Some(Color::from_rgba(0.08, 0.09, 0.11, 0.65).into()),
+            border: iced::Border {
+                color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
+}
 
-        painter.fill_rect(card_x + 16.0, 269.0, card_w - 32.0, 1.0, 0x0C000000);
+fn view_content(state: &DemoState) -> Element<'_, Message> {
+    let top_bar = row![
+        text(match state.active_tab {
+            0 => "General Settings",
+            1 => "Display & Dynamic Range",
+            2 => "Stage Manager Preservation",
+            _ => "System Diagnostics",
+        })
+        .size(18),
+        space::horizontal(),
+        button(text("Reset").size(12))
+            .padding([4, 12])
+            .on_press(Message::ResetDefaults)
+            .style(|_theme, _status| button::Style {
+                background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.1).into()),
+                text_color: Color::from_rgb(0.85, 0.85, 0.85),
+                border: iced::Border {
+                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.15),
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                ..Default::default()
+            }),
+    ]
+    .align_y(Alignment::Center)
+    .padding([14, 24])
+    .height(Length::Fixed(52.0));
 
-        painter.draw_text("Stage Manager Guard", card_x + 16.0, 281.0, 0xEE1A1A1A);
-        painter.draw_text("Protected", card_x + card_w - 78.0, 281.0, 0xFF34C759);
+    let cards = match state.active_tab {
+        0 => view_general_cards(state),
+        1 => view_display_cards(state),
+        2 => view_guard_cards(state),
+        _ => view_diagnostic_cards(state),
+    };
 
-        painter.fill_rect(card_x + 16.0, 306.0, card_w - 32.0, 1.0, 0x0C000000);
+    let content_area = column![
+        top_bar,
+        scrollable(
+            column![cards]
+                .padding(Padding {
+                    top: 8.0,
+                    right: 24.0,
+                    bottom: 24.0,
+                    left: 24.0,
+                })
+                .spacing(16)
+        )
+        .height(Length::Fill),
+    ]
+    .width(Length::Fill)
+    .height(Length::Fill);
 
-        painter.draw_text("EDR & Extended Linear sRGB", card_x + 16.0, 318.0, 0xEE1A1A1A);
-        painter.draw_text("Enabled", card_x + card_w - 68.0, 318.0, 0xFF0A7AFF);
+    container(content_area)
+        .style(move |_theme| container::Style {
+            background: Some(Color::from_rgba(0.12, 0.13, 0.16, state.opacity).into()),
+            ..Default::default()
+        })
+        .into()
+}
 
-        painter.fill_rect(card_x + 16.0, 343.0, card_w - 32.0, 1.0, 0x0C000000);
+fn view_general_cards(state: &DemoState) -> Element<'_, Message> {
+    let card1 = card(
+        "Window Blur & Native Material",
+        "Configures the private SkyLight window background blur and background tint opacity.",
+        column![
+            row![
+                column![
+                    text("SkyLight Background Blur").size(14),
+                    text("Uses macOS CGSSetWindowBackgroundBlurRadius(28) for authentic desktop blur.")
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.65)),
+                ]
+                .width(Length::Fill),
+                toggler(state.blur_enabled).on_toggle(Message::ToggleBlur),
+            ]
+            .align_y(Alignment::Center),
+            card_divider(),
+            column![
+                row![
+                    text("Window Tint Opacity").size(14).width(Length::Fill),
+                    text(format!("{:.0}%", state.opacity * 100.0)).size(13),
+                ],
+                slider(0.3..=1.0, state.opacity, Message::OpacityChanged).step(0.01),
+            ]
+            .spacing(8),
+        ]
+        .spacing(12),
+    );
 
-        painter.draw_text("Continuous Corner Radius", card_x + 16.0, 355.0, 0xEE1A1A1A);
-        // Toggle Pill
-        let toggle_x = card_x + card_w - 48.0;
-        let toggle_y = 351.0;
-        let toggle_color = if self.toggle_state { 0xFF34C759 } else { 0xFFCCCCCC };
-        painter.draw_rounded_rect(toggle_x, toggle_y, 34.0, 18.0, 9.0, toggle_color);
-        let knob_x = if self.toggle_state { toggle_x + 18.0 } else { toggle_x + 2.0 };
-        painter.draw_circle(knob_x + 7.0, toggle_y + 9.0, 7.0, 0xFFFFFFFF);
+    let card2 = card(
+        "Window Geometry & Continuous Curvature",
+        "Hardware-level continuous squircle corner clipping mask applied via CALayer.",
+        column![
+            row![
+                text("Continuous Corner Radius").size(14).width(Length::Fill),
+                text(format!("{:.0} pt", state.corner_radius)).size(13),
+            ],
+            slider(0.0..=32.0, state.corner_radius, Message::CornerRadiusChanged).step(1.0),
+            text("macOS standard window corner radius is typically 10 to 18 points with G2 continuity.")
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.6, 0.65)),
+        ]
+        .spacing(8),
+    );
 
-        // 7. Footer Tips
-        painter.draw_text(
-            "Drag top area to move. Double-click to toggle maximize. Press ESC or Q to quit.",
-            card_x,
-            logical_h - 24.0,
-            0x66000000,
+    column![card1, card2].spacing(16).into()
+}
+
+fn view_display_cards(state: &DemoState) -> Element<'_, Message> {
+    let card = card(
+        "Extended Dynamic Range (EDR)",
+        "Configures CAMetalLayer for floating point linear sRGB color space to preserve specular highlights.",
+        column![
+            row![
+                column![
+                    text("Enable Linear EDR Mode").size(14),
+                    text("Sets wantsExtendedDynamicRangeContent and kCGColorSpaceExtendedLinearSRGB on CAMetalLayer.")
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.65)),
+                ]
+                .width(Length::Fill),
+                toggler(state.edr_enabled).on_toggle(Message::ToggleEdr),
+            ]
+            .align_y(Alignment::Center),
+            card_divider(),
+            row![
+                text("Supported Target Layer:").size(13).color(Color::from_rgb(0.7, 0.7, 0.75)),
+                space::horizontal(),
+                text("CAMetalLayer (Liquid Glass / Iced WGPU)").size(13).color(Color::from_rgb(0.3, 0.7, 1.0)),
+            ],
+        ]
+        .spacing(12),
+    );
+
+    column![card].spacing(16).into()
+}
+
+fn view_guard_cards(state: &DemoState) -> Element<'_, Message> {
+    let card = card(
+        "Stage Manager Blur Preservation",
+        "Prevents translucent window flash when macOS Stage Manager or Mission Control rebuilds the compositor state.",
+        column![
+            row![
+                column![
+                    text("Install Re-blur Observer Guard").size(14),
+                    text("Monitors NSWorkspaceActiveSpaceDidChange and NSApplicationDidBecomeActive to restore blur.")
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.65)),
+                ]
+                .width(Length::Fill),
+                toggler(state.guard_enabled).on_toggle(Message::ToggleGuard),
+            ]
+            .align_y(Alignment::Center),
+            card_divider(),
+            text("When switching spaces or switching between app sets in Stage Manager, macOS resets private CGS blur attributes asynchronously. The guard ensures your window retains its frosted glass without flashing unblurred wallpaper.")
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.6, 0.65)),
+        ]
+        .spacing(12),
+    );
+
+    column![card].spacing(16).into()
+}
+
+fn view_diagnostic_cards(state: &DemoState) -> Element<'_, Message> {
+    let rows = [
+        ("Platform Target", "Apple macOS (AppKit + Quartz / SkyLight)"),
+        ("Window Server Connection", "CGSMainConnectionID (Dynamic Symbol)"),
+        ("Blur Implementation", "CGSSetWindowBackgroundBlurRadius (28pt)"),
+        ("Titlebar Integration", "Fullsize Content View + Transparent Titlebar"),
+        ("Traffic Lights", "Native NSWindowCloseButton / Miniaturize / Zoom"),
+        (
+            "Native Hook Status",
+            if state.native_attached {
+                "Active (DesktopBlurTarget attached)"
+            } else {
+                "Waiting for window handle"
+            },
+        ),
+    ];
+
+    let mut col = column![].spacing(10);
+    for (idx, (label, val)) in rows.iter().enumerate() {
+        if idx > 0 {
+            col = col.push(card_divider());
+        }
+        col = col.push(
+            row![
+                text(*label).size(13).color(Color::from_rgb(0.65, 0.65, 0.7)),
+                space::horizontal(),
+                text(*val).size(13).color(Color::from_rgb(0.9, 0.9, 0.9)),
+            ]
+            .align_y(Alignment::Center),
         );
+    }
 
-        buffer.present().expect("present softbuffer frame");
+    let card = card(
+        "Shell Runtime Architecture",
+        "Live inspection of current bmol-window-shell runtime environment and native bindings.",
+        col,
+    );
+
+    column![card].spacing(16).into()
+}
+
+fn card<'a>(
+    title: &'static str,
+    subtitle: &'static str,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let header = column![
+        text(title).size(15),
+        text(subtitle).size(12).color(Color::from_rgb(0.6, 0.6, 0.65)),
+    ]
+    .spacing(4);
+
+    let body = column![header, card_divider(), content.into()].spacing(12);
+
+    container(body)
+        .padding(16)
+        .width(Length::Fill)
+        .style(|_theme| container::Style {
+            background: Some(Color::from_rgba(0.18, 0.20, 0.24, 0.6).into()),
+            border: iced::Border {
+                color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                width: 1.0,
+                radius: 12.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
+}
+
+fn card_divider<'a>() -> Element<'a, Message> {
+    container(column![])
+        .height(Length::Fixed(1.0))
+        .width(Length::Fill)
+        .style(|_theme| container::Style {
+            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.06).into()),
+            ..Default::default()
+        })
+        .into()
+}
+
+fn theme(_state: &DemoState) -> Theme {
+    Theme::Dark
+}
+
+fn style(_state: &DemoState, _theme: &Theme) -> iced::theme::Style {
+    iced::theme::Style {
+        background_color: Color::TRANSPARENT,
+        text_color: Color::from_rgb(0.92, 0.92, 0.92),
     }
 }
 
-// Minimal fast pixel painter
-struct Painter<'a> {
-    buffer: &'a mut [u32],
-    width: usize,
-    height: usize,
-    scale: f32,
-}
-
-impl Painter<'_> {
-    fn set_pixel(&mut self, x: usize, y: usize, color: u32) {
-        if x < self.width && y < self.height {
-            let idx = y * self.width + x;
-            let src_a = (color >> 24) & 0xFF;
-            if src_a == 0xFF {
-                self.buffer[idx] = color;
-            } else if src_a > 0 {
-                // Alpha blend
-                let dst = self.buffer[idx];
-                let dst_a = (dst >> 24) & 0xFF;
-                let dst_r = (dst >> 16) & 0xFF;
-                let dst_g = (dst >> 8) & 0xFF;
-                let dst_b = dst & 0xFF;
-
-                let src_r = (color >> 16) & 0xFF;
-                let src_g = (color >> 8) & 0xFF;
-                let src_b = color & 0xFF;
-
-                let a = src_a + dst_a * (255 - src_a) / 255;
-                let r = (src_r * src_a + dst_r * (255 - src_a)) / 255;
-                let g = (src_g * src_a + dst_g * (255 - src_a)) / 255;
-                let b = (src_b * src_a + dst_b * (255 - src_a)) / 255;
-
-                self.buffer[idx] = (a << 24) | (r << 16) | (g << 8) | b;
-            }
-        }
-    }
-
-    fn fill_rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: u32) {
-        let x0 = (x * self.scale).max(0.0) as usize;
-        let y0 = (y * self.scale).max(0.0) as usize;
-        let x1 = ((x + w) * self.scale).min(self.width as f32) as usize;
-        let y1 = ((y + h) * self.scale).min(self.height as f32) as usize;
-
-        for py in y0..y1 {
-            for px in x0..x1 {
-                self.set_pixel(px, py, color);
-            }
-        }
-    }
-
-    fn draw_circle(&mut self, cx: f32, cy: f32, r: f32, color: u32) {
-        let px_cx = cx * self.scale;
-        let px_cy = cy * self.scale;
-        let px_r = r * self.scale;
-
-        let x0 = (px_cx - px_r - 1.0).max(0.0) as usize;
-        let y0 = (px_cy - px_r - 1.0).max(0.0) as usize;
-        let x1 = (px_cx + px_r + 1.0).min(self.width as f32) as usize;
-        let y1 = (px_cy + px_r + 1.0).min(self.height as f32) as usize;
-
-        for py in y0..y1 {
-            let dy = py as f32 - px_cy;
-            for px in x0..x1 {
-                let dx = px as f32 - px_cx;
-                let dist = dx.hypot(dy);
-                if dist <= px_r {
-                    self.set_pixel(px, py, color);
-                }
-            }
-        }
-    }
-
-    fn draw_close_glyph(&mut self, cx: f32, cy: f32, color: u32) {
-        let px_cx = cx * self.scale;
-        let px_cy = cy * self.scale;
-        let span = 2.5 * self.scale;
-
-        for d in -2..=2 {
-            let step = d as f32 * span / 2.0;
-            self.set_pixel((px_cx + step) as usize, (px_cy + step) as usize, color);
-            self.set_pixel((px_cx + step) as usize, (px_cy - step) as usize, color);
-        }
-    }
-
-    fn draw_minimize_glyph(&mut self, cx: f32, cy: f32, color: u32) {
-        let px_cx = cx * self.scale;
-        let px_cy = cy * self.scale;
-        let span = 3.0 * self.scale;
-
-        let x0 = (px_cx - span) as usize;
-        let x1 = (px_cx + span) as usize;
-        let y = px_cy as usize;
-        for px in x0..=x1 {
-            self.set_pixel(px, y, color);
-        }
-    }
-
-    fn draw_zoom_glyph(&mut self, cx: f32, cy: f32, color: u32) {
-        let px_cx = cx * self.scale;
-        let px_cy = cy * self.scale;
-        let span = 2.0 * self.scale;
-
-        // Top right arrow & bottom left arrow
-        self.set_pixel((px_cx + span) as usize, (px_cy - span) as usize, color);
-        self.set_pixel((px_cx + span - 1.0) as usize, (px_cy - span) as usize, color);
-        self.set_pixel((px_cx + span) as usize, (px_cy - span + 1.0) as usize, color);
-
-        self.set_pixel((px_cx - span) as usize, (px_cy + span) as usize, color);
-        self.set_pixel((px_cx - span + 1.0) as usize, (px_cy + span) as usize, color);
-        self.set_pixel((px_cx - span) as usize, (px_cy + span - 1.0) as usize, color);
-    }
-
-    fn draw_rounded_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
-        let x0 = (x * self.scale).max(0.0) as usize;
-        let y0 = (y * self.scale).max(0.0) as usize;
-        let x1 = ((x + w) * self.scale).min(self.width as f32) as usize;
-        let y1 = ((y + h) * self.scale).min(self.height as f32) as usize;
-        let r_px = r * self.scale;
-
-        let left_c = x * self.scale + r_px;
-        let right_c = (x + w) * self.scale - r_px;
-        let top_c = y * self.scale + r_px;
-        let bot_c = (y + h) * self.scale - r_px;
-
-        for py in y0..y1 {
-            let py_f = py as f32;
-            for px in x0..x1 {
-                let px_f = px as f32;
-                let inside_corner = if px_f < left_c && py_f < top_c {
-                    (px_f - left_c).hypot(py_f - top_c) <= r_px
-                } else if px_f > right_c && py_f < top_c {
-                    (px_f - right_c).hypot(py_f - top_c) <= r_px
-                } else if px_f < left_c && py_f > bot_c {
-                    (px_f - left_c).hypot(py_f - bot_c) <= r_px
-                } else if px_f > right_c && py_f > bot_c {
-                    (px_f - right_c).hypot(py_f - bot_c) <= r_px
-                } else {
-                    true
-                };
-
-                if inside_corner {
-                    self.set_pixel(px, py, color);
-                }
-            }
-        }
-    }
-
-    fn draw_rounded_rect_border(&mut self, x: f32, y: f32, w: f32, h: f32, _r: f32, color: u32) {
-        // Simple outline pass
-        let x0 = x * self.scale;
-        let y0 = y * self.scale;
-        let x1 = (x + w) * self.scale;
-        let y1 = (y + h) * self.scale;
-
-        let left = x0 as usize;
-        let right = x1 as usize;
-        let top = y0 as usize;
-        let bottom = y1 as usize;
-
-        for px in left..right {
-            self.set_pixel(px, top, color);
-            self.set_pixel(px, bottom, color);
-        }
-        for py in top..bottom {
-            self.set_pixel(left, py, color);
-            self.set_pixel(right, py, color);
-        }
-    }
-
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, color: u32) {
-        let mut cur_x = (x * self.scale) as usize;
-        let cur_y = (y * self.scale) as usize;
-
-        for ch in text.chars() {
-            if let Some(bitmap) = get_char_bitmap(ch) {
-                for (row, byte) in bitmap.iter().enumerate() {
-                    for col in 0..8 {
-                        if (byte & (1 << (7 - col))) != 0 {
-                            self.set_pixel(cur_x + col, cur_y + row, color);
-                        }
-                    }
-                }
-            }
-            cur_x += 8;
-        }
-    }
-
-    fn draw_text_large(&mut self, text: &str, x: f32, y: f32, color: u32) {
-        let mut cur_x = (x * self.scale) as usize;
-        let cur_y = (y * self.scale) as usize;
-
-        for ch in text.chars() {
-            if let Some(bitmap) = get_char_bitmap(ch) {
-                for (row, byte) in bitmap.iter().enumerate() {
-                    for col in 0..8 {
-                        if (byte & (1 << (7 - col))) != 0 {
-                            // 2x2 block
-                            self.set_pixel(cur_x + col * 2, cur_y + row * 2, color);
-                            self.set_pixel(cur_x + col * 2 + 1, cur_y + row * 2, color);
-                            self.set_pixel(cur_x + col * 2, cur_y + row * 2 + 1, color);
-                            self.set_pixel(cur_x + col * 2 + 1, cur_y + row * 2 + 1, color);
-                        }
-                    }
-                }
-            }
-            cur_x += 16;
-        }
-    }
-}
-
-// Built-in crisp 8x8 font glyph table
-fn get_char_bitmap(ch: char) -> Option<[u8; 8]> {
-    match ch {
-        'A' => Some([0x18, 0x24, 0x42, 0x42, 0x7E, 0x42, 0x42, 0x00]),
-        'B' => Some([0x7C, 0x22, 0x22, 0x3C, 0x22, 0x22, 0x7C, 0x00]),
-        'C' => Some([0x3C, 0x42, 0x40, 0x40, 0x40, 0x42, 0x3C, 0x00]),
-        'D' => Some([0x78, 0x24, 0x22, 0x22, 0x22, 0x24, 0x78, 0x00]),
-        'E' => Some([0x7E, 0x40, 0x40, 0x78, 0x40, 0x40, 0x7E, 0x00]),
-        'F' => Some([0x7E, 0x40, 0x40, 0x78, 0x40, 0x40, 0x40, 0x00]),
-        'G' => Some([0x3C, 0x42, 0x40, 0x4E, 0x42, 0x42, 0x3C, 0x00]),
-        'H' => Some([0x42, 0x42, 0x42, 0x7E, 0x42, 0x42, 0x42, 0x00]),
-        'I' => Some([0x38, 0x10, 0x10, 0x10, 0x10, 0x10, 0x38, 0x00]),
-        'L' => Some([0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x7E, 0x00]),
-        'M' => Some([0x42, 0x66, 0x5A, 0x42, 0x42, 0x42, 0x42, 0x00]),
-        'N' => Some([0x42, 0x62, 0x52, 0x4A, 0x46, 0x42, 0x42, 0x00]),
-        'O' => Some([0x3C, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3C, 0x00]),
-        'P' => Some([0x7C, 0x42, 0x42, 0x7C, 0x40, 0x40, 0x40, 0x00]),
-        'R' => Some([0x7C, 0x42, 0x42, 0x7C, 0x48, 0x44, 0x42, 0x00]),
-        'S' => Some([0x3C, 0x42, 0x40, 0x3C, 0x02, 0x42, 0x3C, 0x00]),
-        'T' => Some([0x7E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00]),
-        'U' => Some([0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3C, 0x00]),
-        'V' => Some([0x42, 0x42, 0x42, 0x42, 0x42, 0x24, 0x18, 0x00]),
-        'W' => Some([0x42, 0x42, 0x42, 0x5A, 0x5A, 0x66, 0x42, 0x00]),
-        'Y' => Some([0x42, 0x42, 0x24, 0x18, 0x18, 0x18, 0x18, 0x00]),
-        'Z' => Some([0x7E, 0x04, 0x08, 0x10, 0x20, 0x40, 0x7E, 0x00]),
-        'a' => Some([0x00, 0x00, 0x38, 0x04, 0x3C, 0x44, 0x3A, 0x00]),
-        'b' => Some([0x40, 0x40, 0x5C, 0x62, 0x42, 0x62, 0x5C, 0x00]),
-        'c' => Some([0x00, 0x00, 0x3C, 0x42, 0x40, 0x42, 0x3C, 0x00]),
-        'd' => Some([0x02, 0x02, 0x3A, 0x46, 0x42, 0x46, 0x3A, 0x00]),
-        'e' => Some([0x00, 0x00, 0x3C, 0x42, 0x7E, 0x40, 0x3C, 0x00]),
-        'f' => Some([0x0C, 0x12, 0x10, 0x38, 0x10, 0x10, 0x10, 0x00]),
-        'g' => Some([0x00, 0x00, 0x3A, 0x46, 0x46, 0x3E, 0x06, 0x3C]),
-        'h' => Some([0x40, 0x40, 0x5C, 0x62, 0x42, 0x42, 0x42, 0x00]),
-        'i' => Some([0x10, 0x00, 0x30, 0x10, 0x10, 0x10, 0x38, 0x00]),
-        'k' => Some([0x40, 0x40, 0x44, 0x48, 0x70, 0x48, 0x44, 0x00]),
-        'l' => Some([0x30, 0x10, 0x10, 0x10, 0x10, 0x10, 0x38, 0x00]),
-        'm' => Some([0x00, 0x00, 0x6C, 0x92, 0x92, 0x92, 0x92, 0x00]),
-        'n' => Some([0x00, 0x00, 0x5C, 0x62, 0x42, 0x42, 0x42, 0x00]),
-        'o' => Some([0x00, 0x00, 0x3C, 0x42, 0x42, 0x42, 0x3C, 0x00]),
-        'p' => Some([0x00, 0x00, 0x5C, 0x62, 0x62, 0x5C, 0x40, 0x40]),
-        'q' => Some([0x00, 0x00, 0x3A, 0x46, 0x46, 0x3A, 0x02, 0x02]),
-        'r' => Some([0x00, 0x00, 0x2E, 0x32, 0x20, 0x20, 0x20, 0x00]),
-        's' => Some([0x00, 0x00, 0x3C, 0x40, 0x3C, 0x02, 0x7C, 0x00]),
-        't' => Some([0x10, 0x10, 0x3C, 0x10, 0x10, 0x12, 0x0C, 0x00]),
-        'u' => Some([0x00, 0x00, 0x42, 0x42, 0x42, 0x46, 0x3A, 0x00]),
-        'v' => Some([0x00, 0x00, 0x42, 0x42, 0x24, 0x24, 0x18, 0x00]),
-        'w' => Some([0x00, 0x00, 0x42, 0x5A, 0x5A, 0x24, 0x24, 0x00]),
-        'x' => Some([0x00, 0x00, 0x42, 0x24, 0x18, 0x24, 0x42, 0x00]),
-        'y' => Some([0x00, 0x00, 0x42, 0x42, 0x46, 0x3A, 0x02, 0x3C]),
-        'z' => Some([0x00, 0x00, 0x7E, 0x08, 0x10, 0x20, 0x7E, 0x00]),
-        '0' => Some([0x3C, 0x46, 0x4A, 0x52, 0x62, 0x42, 0x3C, 0x00]),
-        '1' => Some([0x18, 0x28, 0x08, 0x08, 0x08, 0x08, 0x3E, 0x00]),
-        '2' => Some([0x3C, 0x42, 0x02, 0x0C, 0x30, 0x40, 0x7E, 0x00]),
-        '3' => Some([0x3C, 0x42, 0x02, 0x1C, 0x02, 0x42, 0x3C, 0x00]),
-        '4' => Some([0x08, 0x18, 0x28, 0x48, 0x7E, 0x08, 0x08, 0x00]),
-        '5' => Some([0x7E, 0x40, 0x7C, 0x02, 0x02, 0x42, 0x3C, 0x00]),
-        '6' => Some([0x3C, 0x42, 0x40, 0x7C, 0x42, 0x42, 0x3C, 0x00]),
-        '7' => Some([0x7E, 0x02, 0x04, 0x08, 0x10, 0x20, 0x20, 0x00]),
-        '8' => Some([0x3C, 0x42, 0x42, 0x3C, 0x42, 0x42, 0x3C, 0x00]),
-        '9' => Some([0x3C, 0x42, 0x42, 0x3E, 0x02, 0x42, 0x3C, 0x00]),
-        '.' => Some([0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x00]),
-        ',' => Some([0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x30]),
-        '-' => Some([0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00]),
-        ':' => Some([0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00, 0x00]),
-        '(' => Some([0x0C, 0x18, 0x30, 0x30, 0x30, 0x18, 0x0C, 0x00]),
-        ')' => Some([0x30, 0x18, 0x0C, 0x0C, 0x0C, 0x18, 0x30, 0x00]),
-        '/' => Some([0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x00]),
-        ' ' => Some([0x00; 8]),
-        _ => Some([0x7E, 0x42, 0x42, 0x42, 0x42, 0x42, 0x7E, 0x00]),
-    }
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let event_loop = EventLoop::new()?;
-    event_loop.set_control_flow(ControlFlow::Wait);
-
-    let mut app = App::default();
-    event_loop.run_app(&mut app)?;
-
-    Ok(())
+fn main() -> iced::Result {
+    iced::application(boot, update, view)
+        .subscription(subscription)
+        .theme(theme)
+        .style(style)
+        .window(window::Settings {
+            size: Size::new(960.0, 620.0),
+            min_size: Some(Size::new(760.0, 480.0)),
+            transparent: true,
+            blur: true,
+            decorations: true,
+            platform_specific: window::settings::PlatformSpecific {
+                title_hidden: true,
+                titlebar_transparent: true,
+                fullsize_content_view: true,
+            },
+            ..Default::default()
+        })
+        .run()
 }

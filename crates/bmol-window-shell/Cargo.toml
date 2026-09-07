@@ -14,8 +14,8 @@ bmol-window-platform = { path = "../bmol-window-platform", version = "0.1.0" }
 raw-window-handle = "0.6.2"
 
 [dev-dependencies]
-softbuffer = "0.4"
-winit = { version = "0.30.12", default-features = false, features = ["rwh_06"] }
+iced = { version = "0.14.0", default-features = false, features = ["wgpu", "advanced", "canvas", "svg", "smol"] }
+raw-window-handle = "0.6.2"
 
 [lints]
 workspace = true
