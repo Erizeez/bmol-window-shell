@@ -57,6 +57,7 @@ enum ThemePreference {
 enum Message {
     WindowOpened(window::Id),
     WindowResized(Size),
+    ResizeWindow(window::Direction),
     TabSelected(usize),
     SelectLayout(LayoutSelection),
     SelectTheme(ThemePreference),
@@ -218,6 +219,26 @@ impl DemoState {
             origin_y,
         );
     }
+
+    fn sync_native_window(&self) -> Task<Message> {
+        if let Some(id) = self.window_id {
+            let options = bmol_window_shell::NativeWindowOptions::new()
+                .with_corner_radius(self.corner_radius)
+                .with_appearance(self.native_appearance())
+                .with_system_shadow(self.system_shadow)
+                .with_edr(self.edr_enabled)
+                .with_stage_manager_guard(self.guard_enabled);
+
+            window::run(id, move |w| {
+                if let Ok(handle) = w.window_handle() {
+                    let _ = bmol_window_shell::setup_native_window(handle.as_raw(), options);
+                }
+            })
+            .discard()
+        } else {
+            Task::none()
+        }
+    }
 }
 
 fn boot() -> (DemoState, Task<Message>) {
@@ -255,29 +276,18 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
         Message::WindowOpened(id) => {
             state.window_id = Some(id);
             state.native_attached = true;
-            let radius = state.corner_radius;
-            let edr = state.edr_enabled;
-            let shadow = state.system_shadow;
-            let appearance = state.native_appearance();
-
-            window::run(id, move |w| {
-                if let Ok(handle) = w.window_handle() {
-                    let rwh = handle.as_raw();
-                    if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                        bmol_window_shell::install_stage_manager_guard(target);
-                        bmol_window_shell::configure_window_corner_radius(target, radius);
-                        bmol_window_shell::configure_window_shadow(target, shadow);
-                        bmol_window_shell::configure_window_appearance(target, appearance);
-                        bmol_window_shell::configure_extended_dynamic_range(target, edr);
-                        bmol_window_shell::refresh_desktop_blur(target);
-                    }
-                }
-            })
-            .discard()
+            state.sync_native_window()
         }
         Message::WindowResized(size) => {
             state.window_size = size;
             Task::none()
+        }
+        Message::ResizeWindow(direction) => {
+            if let Some(id) = state.window_id {
+                window::drag_resize(id, direction)
+            } else {
+                Task::none()
+            }
         }
         Message::TabSelected(tab) => {
             state.active_tab = tab;
@@ -289,38 +299,12 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
         }
         Message::SelectTheme(pref) => {
             state.theme_preference = pref;
-            let appearance = state.native_appearance();
-            if let Some(id) = state.window_id {
-                window::run(id, move |w| {
-                    if let Ok(handle) = w.window_handle() {
-                        let rwh = handle.as_raw();
-                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                            bmol_window_shell::configure_window_appearance(target, appearance);
-                        }
-                    }
-                })
-                .discard()
-            } else {
-                Task::none()
-            }
+            state.sync_native_window()
         }
         Message::SystemThemeChanged(mode) => {
             state.system_theme = mode;
             if state.theme_preference == ThemePreference::System {
-                if let Some(id) = state.window_id {
-                    let appearance = state.native_appearance();
-                    window::run(id, move |w| {
-                        if let Ok(handle) = w.window_handle() {
-                            let rwh = handle.as_raw();
-                            if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                                bmol_window_shell::configure_window_appearance(target, appearance);
-                            }
-                        }
-                    })
-                    .discard()
-                } else {
-                    Task::none()
-                }
+                state.sync_native_window()
             } else {
                 Task::none()
             }
@@ -335,20 +319,7 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
             if state.system_theme != current_mode {
                 state.system_theme = current_mode;
                 if state.theme_preference == ThemePreference::System {
-                    if let Some(id) = state.window_id {
-                        let appearance = state.native_appearance();
-                        window::run(id, move |w| {
-                            if let Ok(handle) = w.window_handle() {
-                                let rwh = handle.as_raw();
-                                if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                                    bmol_window_shell::configure_window_appearance(target, appearance);
-                                }
-                            }
-                        })
-                        .discard()
-                    } else {
-                        Task::none()
-                    }
+                    state.sync_native_window()
                 } else {
                     Task::none()
                 }
@@ -370,85 +341,31 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
         }
         Message::ToggleBlur(enabled) => {
             state.blur_enabled = enabled;
-            if let Some(id) = state.window_id {
-                window::run(id, move |w| {
-                    if let Ok(handle) = w.window_handle() {
-                        let rwh = handle.as_raw();
-                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                            if enabled {
-                                bmol_window_shell::refresh_desktop_blur(target);
-                            }
-                        }
-                    }
-                })
-                .discard()
+            if enabled {
+                state.sync_native_window()
             } else {
                 Task::none()
             }
         }
         Message::ToggleShadow(enabled) => {
             state.system_shadow = enabled;
-            if let Some(id) = state.window_id {
-                window::run(id, move |w| {
-                    if let Ok(handle) = w.window_handle() {
-                        let rwh = handle.as_raw();
-                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                            bmol_window_shell::configure_window_shadow(target, enabled);
-                        }
-                    }
-                })
-                .discard()
-            } else {
-                Task::none()
-            }
+            state.sync_native_window()
         }
         Message::ToggleEdr(enabled) => {
             state.edr_enabled = enabled;
-            if let Some(id) = state.window_id {
-                window::run(id, move |w| {
-                    if let Ok(handle) = w.window_handle() {
-                        let rwh = handle.as_raw();
-                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                            bmol_window_shell::configure_extended_dynamic_range(target, enabled);
-                        }
-                    }
-                })
-                .discard()
-            } else {
-                Task::none()
-            }
+            state.sync_native_window()
         }
         Message::ToggleGuard(enabled) => {
             state.guard_enabled = enabled;
-            if enabled && let Some(id) = state.window_id {
-                window::run(id, |w| {
-                    if let Ok(handle) = w.window_handle() {
-                        let rwh = handle.as_raw();
-                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                            bmol_window_shell::install_stage_manager_guard(target);
-                        }
-                    }
-                })
-                .discard()
+            if enabled {
+                state.sync_native_window()
             } else {
                 Task::none()
             }
         }
         Message::CornerRadiusChanged(radius) => {
             state.corner_radius = radius;
-            if let Some(id) = state.window_id {
-                window::run(id, move |w| {
-                    if let Ok(handle) = w.window_handle() {
-                        let rwh = handle.as_raw();
-                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                            bmol_window_shell::configure_window_corner_radius(target, radius);
-                        }
-                    }
-                })
-                .discard()
-            } else {
-                Task::none()
-            }
+            state.sync_native_window()
         }
         Message::OpacityChanged(opacity) => {
             state.opacity = opacity;
@@ -464,21 +381,7 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
             state.guard_enabled = true;
             state.corner_radius = 16.0;
             state.opacity = 0.88;
-            if let Some(id) = state.window_id {
-                window::run(id, move |w| {
-                    if let Ok(handle) = w.window_handle() {
-                        let rwh = handle.as_raw();
-                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
-                            bmol_window_shell::configure_window_corner_radius(target, 16.0);
-                            bmol_window_shell::configure_extended_dynamic_range(target, true);
-                            bmol_window_shell::refresh_desktop_blur(target);
-                        }
-                    }
-                })
-                .discard()
-            } else {
-                Task::none()
-            }
+            state.sync_native_window()
         }
         Message::ToggleMaximize => {
             if let Some(id) = state.window_id {
@@ -588,10 +491,16 @@ fn view(state: &DemoState) -> AppElement<'_> {
         LayoutSelection::UnifiedMultiPane => view_unified_multi_pane(state, plan),
     };
 
-    wrap_window_rim(
+    let rimmed = wrap_window_rim(
         content,
         WindowRimConfig::new(state.is_dark())
             .with_corner_radius(state.corner_radius as f32),
+    );
+
+    bmol_window_shell::wrap_border_resizer(
+        rimmed,
+        false,
+        Message::ResizeWindow,
     )
 }
 
@@ -764,36 +673,9 @@ fn view_layout_toggle(state: &DemoState) -> AppElement<'_> {
     .into()
 }
 
-// =========================================================================
-// Layout 1: Standalone Titlebar (Separate) - 32px White Bar, 16px Clearance
-// =========================================================================
-
-fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<'_> {
-    let titlebar_height = state.metrics.header_rect.height;
+fn view_header_actions(state: &DemoState) -> AppElement<'_> {
     let is_dark = state.is_dark();
-
-    let titlebar_bg = if is_dark {
-        Color::from_rgb8(40, 40, 40)
-    } else {
-        Color::from_rgb(1.0, 1.0, 1.0)
-    };
-    let title_color = if is_dark {
-        Color::from_rgb8(164, 164, 164)
-    } else {
-        Color::from_rgb(0.12, 0.13, 0.15)
-    };
-    let sidebar_bg = if is_dark {
-        Color::from_rgba(0.09, 0.10, 0.12, 0.5)
-    } else {
-        Color::from_rgba(0.94, 0.94, 0.96, 0.7)
-    };
-    let workspace_bg = if is_dark {
-        Color::from_rgba(0.12, 0.13, 0.16, state.opacity)
-    } else {
-        Color::from_rgba(0.98, 0.98, 1.0, state.opacity)
-    };
-
-    let mode_switch = row![
+    row![
         view_theme_toggle(state),
         column![].width(Length::Fixed(6.0)),
         view_layout_toggle(state),
@@ -829,7 +711,40 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
             }),
     ]
     .spacing(4)
-    .align_y(Alignment::Center);
+    .align_y(Alignment::Center)
+    .into()
+}
+
+// =========================================================================
+// Layout 1: Standalone Titlebar (Separate) - 32px White Bar, 16px Clearance
+// =========================================================================
+
+fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<'_> {
+    let titlebar_height = state.metrics.header_rect.height;
+    let is_dark = state.is_dark();
+
+    let titlebar_bg = if is_dark {
+        Color::from_rgb8(40, 40, 40)
+    } else {
+        Color::from_rgb(1.0, 1.0, 1.0)
+    };
+    let title_color = if is_dark {
+        Color::from_rgb8(164, 164, 164)
+    } else {
+        Color::from_rgb(0.12, 0.13, 0.15)
+    };
+    let sidebar_bg = if is_dark {
+        Color::from_rgba(0.09, 0.10, 0.12, 0.5)
+    } else {
+        Color::from_rgba(0.94, 0.94, 0.96, 0.7)
+    };
+    let workspace_bg = if is_dark {
+        Color::from_rgba(0.12, 0.13, 0.16, state.opacity)
+    } else {
+        Color::from_rgba(0.98, 0.98, 1.0, state.opacity)
+    };
+
+    let mode_switch = view_header_actions(state);
 
     let rim_left = state.metrics.rim_insets.left;
     let leading_spacer_w = (4.0 - rim_left).max(0.0);
@@ -977,43 +892,7 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
         .color(title_color),
         // Natural flexible space beneath: clicking/dragging here faithfully triggers window dragging!
         space::horizontal().width(Length::Fill),
-        row![
-            view_theme_toggle(state),
-            column![].width(Length::Fixed(6.0)),
-            view_layout_toggle(state),
-            column![].width(Length::Fixed(6.0)),
-            button(text("Reset").size(11))
-                .padding([3, 8])
-                .on_press(Message::ResetDefaults)
-                .style(move |_theme, status| button::Style {
-                    background: if matches!(status, button::Status::Hovered) {
-                        Some(if is_dark {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
-                        } else {
-                            Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
-                        })
-                    } else {
-                        None
-                    },
-                    text_color: if is_dark {
-                        Color::from_rgb(0.7, 0.7, 0.75)
-                    } else {
-                        Color::from_rgb(0.35, 0.36, 0.40)
-                    },
-                    border: iced::Border {
-                        radius: 4.0.into(),
-                        color: if is_dark {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                        } else {
-                            Color::from_rgba(0.0, 0.0, 0.0, 0.10)
-                        },
-                        width: 1.0,
-                    },
-                    ..Default::default()
-                }),
-        ]
-        .spacing(4)
-        .align_y(Alignment::Center),
+        view_header_actions(state),
         column![].width(Length::Fixed(16.0)),
     ]
     .align_y(Alignment::Center)
@@ -1148,43 +1027,7 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
         .size(14)
         .font(APPLE_HEADER_FONT),
         space::horizontal().width(Length::Fill),
-        row![
-            view_theme_toggle(state),
-            column![].width(Length::Fixed(6.0)),
-            view_layout_toggle(state),
-            column![].width(Length::Fixed(6.0)),
-            button(text("Reset").size(11))
-                .padding([3, 8])
-                .on_press(Message::ResetDefaults)
-                .style(move |_theme, status| button::Style {
-                    background: if matches!(status, button::Status::Hovered) {
-                        Some(if is_dark {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
-                        } else {
-                            Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
-                        })
-                    } else {
-                        None
-                    },
-                    text_color: if is_dark {
-                        Color::from_rgb(0.7, 0.7, 0.75)
-                    } else {
-                        Color::from_rgb(0.35, 0.36, 0.40)
-                    },
-                    border: iced::Border {
-                        radius: 4.0.into(),
-                        color: if is_dark {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                        } else {
-                            Color::from_rgba(0.0, 0.0, 0.0, 0.10)
-                        },
-                        width: 1.0,
-                    },
-                    ..Default::default()
-                }),
-        ]
-        .spacing(4)
-        .align_y(Alignment::Center),
+        view_header_actions(state),
         column![].width(Length::Fixed(16.0)),
     ]
     .align_y(Alignment::Center)

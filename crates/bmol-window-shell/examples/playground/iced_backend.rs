@@ -1741,6 +1741,7 @@ fn blend_color(from: Color, to: Color, amount: f32) -> Color {
     )
 }
 
+#[allow(dead_code)]
 fn traffic_light_color(index: usize, inactive: bool, close_disabled: bool) -> Color {
     traffic_light_color_for_scheme(index, inactive, close_disabled, active_color_scheme())
 }

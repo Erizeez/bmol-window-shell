@@ -175,6 +175,26 @@ impl WindowShellController {
         )
     }
 
+    /// Wraps the application root element in non-client rims plus interactive border resize handles.
+    pub fn wrap_window_with_resizer<'a, Message: 'a + Clone, Theme, Renderer>(
+        &self,
+        content: impl Into<Element<'a, Message, Theme, Renderer>>,
+        corner_radius: f32,
+        on_resize: impl Fn(window::Direction) -> Message + 'a + Copy,
+    ) -> Element<'a, Message, Theme, Renderer>
+    where
+        Theme: 'a + iced::widget::container::Catalog,
+        Theme::Class<'a>: From<iced::widget::container::StyleFn<'a, Theme>>,
+        Renderer: iced::advanced::Renderer + 'a,
+    {
+        let wrapped = self.wrap_window(content, corner_radius);
+        super::resizer::wrap_border_resizer(
+            wrapped,
+            self.state == WindowState::Fullscreen,
+            on_resize,
+        )
+    }
+
     /// Creates a faithful draggable header bar matching this window's chrome.
     pub fn loyal_drag_bar<'a, Message: 'a + Clone, Theme, Renderer>(
         &self,
@@ -218,6 +238,25 @@ impl WindowShellController {
         py: f32,
     ) -> Option<(ResizeDirection, window::Direction, iced::mouse::Interaction)> {
         resolve_resize_at(&self.metrics, px, py)
+    }
+
+    /// One-shot setup and hardening of the host operating system window.
+    pub fn setup_native_window(
+        &self,
+        handle: raw_window_handle::RawWindowHandle,
+        corner_radius: f64,
+    ) -> Option<crate::native::DesktopBlurTarget> {
+        let appearance = if self.is_dark {
+            crate::native::WindowAppearance::Dark
+        } else {
+            crate::native::WindowAppearance::Light
+        };
+        crate::native_setup::setup_native_window(
+            handle,
+            crate::native_setup::NativeWindowOptions::new()
+                .with_appearance(appearance)
+                .with_corner_radius(corner_radius),
+        )
     }
 }
 
