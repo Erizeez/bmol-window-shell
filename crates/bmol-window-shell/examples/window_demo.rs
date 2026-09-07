@@ -21,7 +21,8 @@ use iced::{Alignment, Color, Element, Length, Padding, Size, Subscription, Task,
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LayoutSelection {
     Separate,
-    Unified,
+    UnifiedSinglePane,
+    UnifiedMultiPane,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -149,7 +150,10 @@ impl DemoState {
             LayoutSelection::Separate => {
                 WindowChromeConfig::separate(self.separate_titlebar_height)
             }
-            LayoutSelection::Unified => {
+            LayoutSelection::UnifiedSinglePane => {
+                WindowChromeConfig::unified_header(self.unified_header_height)
+            }
+            LayoutSelection::UnifiedMultiPane => {
                 WindowChromeConfig::unified(self.unified_header_height, Some(self.sidebar_width))
             }
         };
@@ -446,7 +450,8 @@ fn view(state: &DemoState) -> Element<'_, Message> {
 
     let content = match state.layout_selection {
         LayoutSelection::Separate => view_separate_window(state, plan),
-        LayoutSelection::Unified => view_unified_window(state, plan),
+        LayoutSelection::UnifiedSinglePane => view_unified_single_pane(state, plan),
+        LayoutSelection::UnifiedMultiPane => view_unified_multi_pane(state, plan),
     };
 
     // Wrap the entire window in a continuous rounded container with transparent edges
@@ -589,6 +594,103 @@ fn view_theme_toggle(state: &DemoState) -> Element<'_, Message> {
     .into()
 }
 
+/// A transparent, non-intrusive draggable header bar for custom window chromes.
+///
+/// It performs one single, faithful duty:
+/// Visual effects, background styling, and interactive controls are completely owned
+/// and placed by the downstream application. If the user clicks or drags any background
+/// portion or gaps beneath the widgets, it faithfully initiates window dragging; if the
+/// click hits an interactive widget, the widget naturally consumes the event.
+fn loyal_drag_bar<'a>(
+    height: f32,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    mouse_area(
+        container(content.into())
+            .width(Length::Fill)
+            .height(Length::Fixed(height))
+            .style(|_theme| container::Style {
+                background: None,
+                ..Default::default()
+            }),
+    )
+    .on_press(Message::DragWindow)
+    .on_double_click(Message::ToggleMaximize)
+    .into()
+}
+
+fn view_layout_toggle(state: &DemoState) -> Element<'_, Message> {
+    let make_item = |label: &'static str, layout: LayoutSelection| {
+        let is_active = state.layout_selection == layout;
+        let is_dark = state.is_dark();
+        button(text(label).size(11))
+            .padding([3, 7])
+            .on_press(Message::SelectLayout(layout))
+            .style(move |_theme, status| {
+                if is_active {
+                    button::Style {
+                        background: Some(Color::from_rgba(0.0, 0.48, 1.0, 0.85).into()),
+                        text_color: Color::WHITE,
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                } else {
+                    let is_hover = matches!(status, button::Status::Hovered);
+                    button::Style {
+                        background: if is_hover {
+                            Some(if is_dark {
+                                Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
+                            } else {
+                                Color::from_rgba(0.0, 0.0, 0.0, 0.06).into()
+                            })
+                        } else {
+                            None
+                        },
+                        text_color: if is_dark {
+                            Color::from_rgb(0.65, 0.65, 0.70)
+                        } else {
+                            Color::from_rgb(0.35, 0.36, 0.40)
+                        },
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                }
+            })
+    };
+
+    let container_bg = if state.is_dark() {
+        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+    } else {
+        Color::from_rgba(0.0, 0.0, 0.0, 0.05)
+    };
+
+    container(
+        row![
+            make_item("Separate", LayoutSelection::Separate),
+            make_item("Unified (1-Pane)", LayoutSelection::UnifiedSinglePane),
+            make_item("Unified (2-Pane)", LayoutSelection::UnifiedMultiPane),
+        ]
+        .spacing(2)
+        .align_y(Alignment::Center),
+    )
+    .padding(2)
+    .style(move |_theme| container::Style {
+        background: Some(container_bg.into()),
+        border: iced::Border {
+            radius: 6.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .into()
+}
+
 // =========================================================================
 // Layout 1: Standalone Titlebar (Separate) - 32px White Bar, 16px Clearance
 // =========================================================================
@@ -621,47 +723,8 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
     let mode_switch = row![
         view_theme_toggle(state),
         column![].width(Length::Fixed(6.0)),
-        button(text("Separate (Active)").size(11))
-            .padding([3, 8])
-            .style(|_theme, _status| button::Style {
-                background: Some(Color::from_rgba(0.0, 0.48, 1.0, 0.12).into()),
-                text_color: Color::from_rgb(0.0, 0.42, 0.90),
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    color: Color::from_rgba(0.0, 0.48, 1.0, 0.30),
-                    width: 1.0,
-                },
-                ..Default::default()
-            }),
-        button(text("Switch to Unified").size(11))
-            .padding([3, 8])
-            .on_press(Message::SelectLayout(LayoutSelection::Unified))
-            .style(move |_theme, status| button::Style {
-                background: if matches!(status, button::Status::Hovered) {
-                    Some(if is_dark {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
-                    } else {
-                        Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
-                    })
-                } else {
-                    None
-                },
-                text_color: if is_dark {
-                    Color::from_rgb(0.7, 0.7, 0.75)
-                } else {
-                    Color::from_rgb(0.35, 0.36, 0.40)
-                },
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    color: if is_dark {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                    } else {
-                        Color::from_rgba(0.0, 0.0, 0.0, 0.10)
-                    },
-                    width: 1.0,
-                },
-                ..Default::default()
-            }),
+        view_layout_toggle(state),
+        column![].width(Length::Fixed(6.0)),
         button(text("Reset").size(11))
             .padding([3, 8])
             .on_press(Message::ResetDefaults)
@@ -790,13 +853,126 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
 }
 
 // =========================================================================
-// Layout 2: Unified (Integrated) Chrome with Custom Traffic Lights
+// Layout 2: Unified Pure Canvas (Single Pane)
+// No forced sidebar. No artificial toolbar background. The entire page flows
+// naturally, while the transparent top header faithfully handles dragging
+// anywhere the user clicks outside interactive buttons.
 // =========================================================================
 
-fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
+fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
     let header_height = state.metrics.header_rect.height;
+    let is_dark = state.is_dark();
+    let bg_color = if is_dark {
+        Color::from_rgba(0.12, 0.13, 0.16, state.opacity)
+    } else {
+        Color::from_rgba(0.98, 0.98, 1.0, state.opacity)
+    };
 
-    // Top row of sidebar: custom traffic lights aligned to header_height
+    let title_color = if is_dark {
+        Color::from_rgb(0.92, 0.92, 0.95)
+    } else {
+        Color::from_rgb(0.12, 0.13, 0.15)
+    };
+
+    // 1. Top Header Area (Transparent canvas, owned by downstream application)
+    let header_content = row![
+        column![].width(Length::Fixed(16.0)),
+        view_traffic_lights(),
+        column![].width(Length::Fixed(20.0)),
+        text(match state.active_tab {
+            0 => "Window Architecture",
+            1 => "Layout & Collision Hitboxes",
+            2 => "Display & EDR Dynamic Range",
+            _ => "Compositor & Stage Manager",
+        })
+        .size(15)
+        .color(title_color),
+        // Natural flexible space beneath: clicking/dragging here faithfully triggers window dragging!
+        space::horizontal().width(Length::Fill),
+        row![
+            view_theme_toggle(state),
+            column![].width(Length::Fixed(6.0)),
+            view_layout_toggle(state),
+            column![].width(Length::Fixed(6.0)),
+            button(text("Reset").size(11))
+                .padding([3, 8])
+                .on_press(Message::ResetDefaults)
+                .style(move |_theme, status| button::Style {
+                    background: if matches!(status, button::Status::Hovered) {
+                        Some(if is_dark {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
+                        } else {
+                            Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
+                        })
+                    } else {
+                        None
+                    },
+                    text_color: if is_dark {
+                        Color::from_rgb(0.7, 0.7, 0.75)
+                    } else {
+                        Color::from_rgb(0.35, 0.36, 0.40)
+                    },
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        color: if is_dark {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                        } else {
+                            Color::from_rgba(0.0, 0.0, 0.0, 0.10)
+                        },
+                        width: 1.0,
+                    },
+                    ..Default::default()
+                }),
+        ]
+        .spacing(4)
+        .align_y(Alignment::Center),
+        column![].width(Length::Fixed(16.0)),
+    ]
+    .align_y(Alignment::Center)
+    .height(Length::Fixed(header_height))
+    .width(Length::Fill);
+
+    let draggable_header = loyal_drag_bar(header_height, header_content);
+
+    // 2. Full-width content body (Single Pane Canvas)
+    let main_body = view_content_cards(state);
+
+    let page = column![draggable_header, main_body]
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+    let page_container = container(page)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_theme| container::Style {
+            background: Some(bg_color.into()),
+            border: iced::Border {
+                radius: 16.0.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+    if state.show_hitboxes {
+        column![page_container, view_hitboxes_overlay_banner(&state.metrics)]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    } else {
+        page_container.into()
+    }
+}
+
+// =========================================================================
+// Layout 3: Unified Multi-Pane (Split Sidebar Workspace)
+// Downstream application chooses to split layout with a sidebar. The top header
+// remains faithful: dragging beneath any widget moves the window.
+// =========================================================================
+
+fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
+    let header_height = state.metrics.header_rect.height;
+    let is_dark = state.is_dark();
+
     let sidebar_header_content = row![
         column![].width(Length::Fixed(16.0)),
         view_traffic_lights(),
@@ -806,9 +982,7 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
     .height(Length::Fixed(header_height))
     .width(Length::Fill);
 
-    let draggable_sidebar_header = mouse_area(sidebar_header_content)
-        .on_press(Message::DragWindow)
-        .on_double_click(Message::ToggleMaximize);
+    let draggable_sidebar_header = loyal_drag_bar(header_height, sidebar_header_content);
 
     let sidebar_body = column![
         text("NAVIGATION")
@@ -829,7 +1003,6 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
         .height(Length::Fill)
         .width(Length::Fill);
 
-    let is_dark = state.is_dark();
     let unified_sidebar_bg = if is_dark {
         Color::from_rgba(0.08, 0.09, 0.11, 0.65)
     } else {
@@ -860,28 +1033,29 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
 
     let v_separator = container(column![]).width(Length::Fixed(0.0));
 
-    // 2. Right Content Area: Toolbar on top + cards
+    // Right Content Area
     let top_toolbar_content = row![
-        column![].width(Length::Fixed(24.0)),
+        column![].width(Length::Fixed(20.0)),
         text(match state.active_tab {
             0 => "Window Architecture",
             1 => "Layout & Collision Hitboxes",
             2 => "Display & EDR Dynamic Range",
             _ => "Compositor & Stage Manager",
         })
-        .size(16),
-        // Continuous flexible draggable space across entire toolbar
+        .size(15),
         space::horizontal().width(Length::Fill),
         row![
             view_theme_toggle(state),
             column![].width(Length::Fixed(6.0)),
-            button(text("Switch to Separate").size(11))
-                .padding([4, 8])
-                .on_press(Message::SelectLayout(LayoutSelection::Separate))
+            view_layout_toggle(state),
+            column![].width(Length::Fixed(6.0)),
+            button(text("Reset").size(11))
+                .padding([3, 8])
+                .on_press(Message::ResetDefaults)
                 .style(move |_theme, status| button::Style {
                     background: if matches!(status, button::Status::Hovered) {
                         Some(if is_dark {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.1).into()
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
                         } else {
                             Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
                         })
@@ -895,33 +1069,25 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
                     },
                     border: iced::Border {
                         radius: 4.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }),
-            button(text("Unified (Active)").size(11))
-                .padding([4, 8])
-                .style(|_theme, _status| button::Style {
-                    background: Some(Color::from_rgba(0.2, 0.5, 1.0, 0.4).into()),
-                    text_color: Color::from_rgb(0.4, 0.8, 1.0),
-                    border: iced::Border {
-                        radius: 4.0.into(),
-                        ..Default::default()
+                        color: if is_dark {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                        } else {
+                            Color::from_rgba(0.0, 0.0, 0.0, 0.10)
+                        },
+                        width: 1.0,
                     },
                     ..Default::default()
                 }),
         ]
         .spacing(4)
         .align_y(Alignment::Center),
-        column![].width(Length::Fixed(24.0)),
+        column![].width(Length::Fixed(16.0)),
     ]
     .align_y(Alignment::Center)
     .height(Length::Fixed(header_height))
     .width(Length::Fill);
 
-    let draggable_top_toolbar = mouse_area(top_toolbar_content)
-        .on_press(Message::DragWindow)
-        .on_double_click(Message::ToggleMaximize);
+    let draggable_top_toolbar = loyal_drag_bar(header_height, top_toolbar_content);
 
     let main_body = view_content_cards(state);
 
@@ -1118,9 +1284,22 @@ fn view_tab_architecture(state: &DemoState) -> Element<'_, Message> {
                             ..Default::default()
                         }
                     }),
-                button(text("Unified (Integrated Chrome)").size(13))
-                    .padding([8, 16])
-                    .on_press(Message::SelectLayout(LayoutSelection::Unified))
+                button(text("Unified (Single Pane)").size(13))
+                    .padding([8, 14])
+                    .on_press(Message::SelectLayout(LayoutSelection::UnifiedSinglePane))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(Color::from_rgba(0.2, 0.4, 0.8, 0.3).into()),
+                        text_color: Color::from_rgb(0.85, 0.85, 0.9),
+                        border: iced::Border {
+                            radius: 6.0.into(),
+                            color: Color::from_rgba(0.3, 0.6, 1.0, 0.4),
+                            width: 1.0,
+                        },
+                        ..Default::default()
+                    }),
+                button(text("Unified (Multi-Pane)").size(13))
+                    .padding([8, 14])
+                    .on_press(Message::SelectLayout(LayoutSelection::UnifiedMultiPane))
                     .style(|_theme, _status| button::Style {
                         background: Some(Color::from_rgba(0.2, 0.4, 0.8, 0.3).into()),
                         text_color: Color::from_rgb(0.85, 0.85, 0.9),
@@ -1132,14 +1311,17 @@ fn view_tab_architecture(state: &DemoState) -> Element<'_, Message> {
                         ..Default::default()
                     }),
             ]
-            .spacing(12),
+            .spacing(10),
             card_divider(),
             text(match state.layout_selection {
                 LayoutSelection::Separate => {
                     "Current: Separate Mode. 32px pure white titlebar with custom traffic lights. Content strictly starts below the titlebar."
                 }
-                LayoutSelection::Unified => {
-                    "Current: Unified Mode. Content & sidebar extend to top edges. Downstream applications avoid traffic lights using computed collision hitboxes."
+                LayoutSelection::UnifiedSinglePane => {
+                    "Current: Unified Pure Canvas (Single Pane). No forced sidebar, no artificial top bar background. The top area is a transparent loyal drag layer: custom buttons work as expected, while dragging any background beneath faithfully initiates smooth window moving."
+                }
+                LayoutSelection::UnifiedMultiPane => {
+                    "Current: Unified Multi-Pane (Sidebar Workspace). Downstream application chooses to split layout. The continuous top drag layer faithfully handles background window dragging."
                 }
             })
             .size(12)

@@ -109,6 +109,17 @@ impl WindowChromeConfig {
             toolbar_action_reserved_width: 160.0,
         }
     }
+
+    /// Creates a pure unified layout config specifying only the top header height.
+    ///
+    /// The page layout is completely owned and styled by the downstream application
+    /// (single-pane, multi-column, or custom canvas). The shell provides collision
+    /// bounds for traffic lights avoidance and ensures the entire top background
+    /// faithfully handles window dragging.
+    #[must_use]
+    pub const fn unified_header(header_height: f32) -> Self {
+        Self::unified(header_height, None)
+    }
 }
 
 /// Identifies which semantic zone a given coordinate hits within the window chrome.
@@ -438,5 +449,23 @@ mod tests {
         assert!(!uni_plan.show_titlebar_separator);
         assert!(uni_plan.show_sidebar_separator);
         assert_eq!(uni_plan.sidebar_separator_x, Some(180.0));
+    }
+
+    #[test]
+    fn test_unified_header_single_pane() {
+        let config = WindowChromeConfig::unified_header(48.0);
+        let metrics = WindowChromeMetrics::compute(900.0, 600.0, &config);
+
+        assert_eq!(metrics.header_rect, Rect::new(0.0, 0.0, 900.0, 48.0));
+        assert!(metrics.sidebar_rect.is_none());
+        assert!(metrics.sidebar_safe_content_rect.is_none());
+        // Content occupies the full window dimensions
+        assert_eq!(metrics.content_rect, Rect::new(0.0, 0.0, 900.0, 600.0));
+        // Drag regions span continuously across the top from traffic lights clearance
+        assert!(!metrics.drag_regions.is_empty());
+        let drag_rect = metrics.drag_regions[0];
+        assert_eq!(drag_rect.y, 0.0);
+        assert_eq!(drag_rect.height, 48.0);
+        assert!(drag_rect.width > 600.0);
     }
 }
