@@ -3,6 +3,19 @@
 //! Provides the official outer rim wrapper (`wrap_window_rim`) and loyal
 //! drag bar (`loyal_drag_bar`) adhering to macOS and Linux design invariants.
 
+pub mod controller;
+pub mod resizer;
+pub mod traffic_lights;
+
+pub use controller::{ShellEvent, WindowShellController};
+pub use resizer::{
+    resolve_resize_at, resize_direction_to_interaction, resize_direction_to_window_direction,
+};
+pub use traffic_lights::{
+    NATIVE_TRAFFIC_LIGHT_GAP, NATIVE_TRAFFIC_LIGHT_SIZE, TrafficLightsAction, TrafficLightsConfig,
+    TrafficLightsState, view_single_button, view_traffic_lights,
+};
+
 use iced::{
     Color, Element, Length,
     widget::{container, mouse_area},
@@ -174,3 +187,29 @@ where
 
     area.into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_window_rim_config() {
+        let config = WindowRimConfig::new(true)
+            .with_corner_radius(12.0)
+            .with_state(WindowState::Maximized);
+
+        assert!(config.is_dark);
+        assert_eq!(config.corner_radius, 12.0);
+        assert_eq!(config.state, WindowState::Maximized);
+
+        let from_bool: WindowRimConfig = false.into();
+        assert!(!from_bool.is_dark);
+        assert_eq!(from_bool.corner_radius, 10.0);
+
+        let from_tuple: WindowRimConfig = (true, 16.0).into();
+        assert!(from_tuple.is_dark);
+        assert_eq!(from_tuple.corner_radius, 16.0);
+    }
+}
+
+
