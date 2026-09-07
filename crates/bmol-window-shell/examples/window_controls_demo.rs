@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use iced::{
     Background, Color, Element, Length, Padding, Subscription, Task, Theme,
-    widget::{button, column, container, mouse_area, row, scrollable, space, stack, text},
+    widget::{button, column, container, row, scrollable, space, stack, text},
 };
 use iced_backend::{
     DemoSurface, Renderer, WINDOW_CONTROL_DISABLED_IDS,
@@ -28,10 +28,10 @@ use iced_backend::{
     WindowControlTuning,
 };
 use liquid_glass::{
-    GlassButton, GlassId, GlassMaterial, GlassRole, GlassShape, IcedWindowController,
-    IcedWindowPolicy, Rect, UiColorScheme, UiCornerStyle, UiTheme, WindowCommand,
+    GlassId, IcedWindowController,
+    IcedWindowPolicy, UiColorScheme, UiCornerStyle, UiTheme, WindowCommand,
     WindowDragArea, WindowExpandBehavior,
-    ui::{GlassChrome, components, font},
+    ui::{components, font},
 };
 use spring_rs::{Spring, SpringMotion};
 
@@ -819,122 +819,24 @@ fn control_group(
     expand_behavior: WindowExpandBehavior,
     press_scales: [f32; 3],
 ) -> AppElement<'static> {
-    let inactive = group == ControlGroup::Inactive;
-    let controls = row![
-        window_control(
-            ids[0],
-            size,
-            scheme,
-            ControlAction::Close,
-            show_glyphs,
-            close_disabled,
-            interactive,
-            inactive,
-            hover_amount,
-            expand_behavior,
-            press_scales[0],
-        ),
-        window_control(
-            ids[1],
-            size,
-            scheme,
-            ControlAction::Minimize,
-            show_glyphs,
-            false,
-            interactive,
-            inactive,
-            hover_amount,
-            expand_behavior,
-            press_scales[1],
-        ),
-        window_control(
-            ids[2],
-            size,
-            scheme,
-            ControlAction::Expand,
-            show_glyphs,
-            false,
-            interactive,
-            inactive,
-            hover_amount,
-            expand_behavior,
-            press_scales[2],
-        ),
-    ]
-    .spacing(gap);
-    let slop = control_hover_slop(size);
-    let group_width = size * 3.0 + gap * 2.0;
-    let tracking_area = container(controls)
-        .width(Length::Fixed(group_width + slop * 2.0))
-        .height(Length::Fixed(size + slop * 2.0))
-        .padding(Padding { top: slop, right: slop, bottom: slop, left: slop });
-    mouse_area(tracking_area)
-        .on_enter(Message::ControlGroupHover { group, hovered: true })
-        .on_exit(Message::ControlGroupHover { group, hovered: false })
-        .into()
-}
-
-fn window_control(
-    id: GlassId,
-    size: f32,
-    scheme: UiColorScheme,
-    action: ControlAction,
-    show_glyph: bool,
-    disabled: bool,
-    interactive: bool,
-    inactive: bool,
-    hover_amount: f32,
-    expand_behavior: WindowExpandBehavior,
-    scale: f32,
-) -> AppElement<'static> {
-    let visual_size = size * scale;
-    let mut chrome: GlassChrome =
-        UiTheme::new(scheme).compositor_chrome(GlassRole::FloatingControl);
-    chrome.text = match scheme {
-        UiColorScheme::Light | UiColorScheme::Dark => {
-            liquid_glass::Color::rgba(0.22, 0.23, 0.25, 0.92)
-        }
-    };
-    let button = GlassButton::new(id, "", Rect::new(0.0, 0.0, visual_size, visual_size))
-        .shape(GlassShape::Circle)
-        .material(GlassMaterial::interactive())
-        .chrome({
-            chrome.pressed_overlay = liquid_glass::Color::transparent();
-            chrome
-        });
-    let button = if interactive {
-        button.into_element_with_press_callbacks::<Message, Theme, Renderer>(
-            Message::ControlPressed { id, action, execute: true },
-            Some(Message::ControlPressStarted { id }),
-            Some(Message::ControlPressVisualCancelled { id }),
-            Some(Message::ControlPressEnded { id }),
-        )
-    } else {
-        button.into_element::<Message, Theme, Renderer>(Message::ControlPressed {
-            id,
-            action,
-            execute: false,
-        })
-    };
-    let status_dot = action == ControlAction::Close && disabled;
-    let button = centered(button, size);
-    let glyph = if status_dot {
-        let glyph_color = window_control_glyph_color(scheme, action, inactive, 1.0);
-        window_control_status_dot(glyph_color, visual_size)
-    } else {
-        let focus_amount = if show_glyph { hover_amount } else { 0.0 };
-        let glyph_color = window_control_glyph_color(scheme, action, inactive, focus_amount);
-        components::icon_tinted_with_opacity(
-            window_control_icon(action, expand_behavior),
-            window_control_glyph_size(action, size) * scale,
-            glyph_color,
-        )
-    };
-
-    // Keep the button and its glyph in a stable tree shape. Changing from a
-    // single child to a button+glyph stack during hover would recreate the
-    // button's capture node exactly while a press is in flight.
-    components::glass_overlay(stack![button, centered(glyph, size)])
+    window_controls::control_group(
+        ids,
+        size,
+        gap,
+        scheme,
+        show_glyphs,
+        close_disabled,
+        interactive,
+        group == ControlGroup::Inactive,
+        hover_amount,
+        expand_behavior,
+        press_scales,
+        move |id, action| Message::ControlPressed { id, action, execute: interactive },
+        move |id| Message::ControlPressStarted { id },
+        move |id| Message::ControlPressVisualCancelled { id },
+        move |id| Message::ControlPressEnded { id },
+        move |hovered| Message::ControlGroupHover { group, hovered },
+    )
 }
 
 fn main() -> iced::Result {

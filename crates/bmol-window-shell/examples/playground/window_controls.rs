@@ -6,11 +6,14 @@
 
 use std::time::Instant;
 
-use iced::advanced::{self, svg as advanced_svg};
-use iced::widget::{button, container, mouse_area, row, space};
-use iced::{Alignment, Background, Color, Element, Length, Padding, Theme};
-use liquid_glass::{UiColorScheme, UiIcon, WindowExpandBehavior};
-use liquid_glass_ui::components;
+use iced::advanced::{self, svg as advanced_svg, text as advanced_text};
+use iced::widget::{container, mouse_area, row, space, stack};
+use iced::{Background, Color, Element, Length, Padding, Theme};
+use liquid_glass::{
+    GlassButton, GlassId, GlassMaterial, GlassRole, GlassShape, Rect, UiColorScheme, UiIcon,
+    UiTheme, WindowExpandBehavior,
+    ui::{GlassChrome, components},
+};
 use spring_rs::{Spring, SpringMotion};
 
 // Standard macOS traffic light dimensions
@@ -18,6 +21,12 @@ pub const WINDOW_CONTROL_NATIVE_SIZE: f32 = 14.0;
 pub const WINDOW_CONTROL_LARGE_SIZE: f32 = 64.0;
 pub const WINDOW_CONTROL_GAP: f32 = 7.0;
 pub const WINDOW_CONTROL_LARGE_GAP: f32 = 12.0;
+
+pub const WINDOW_CONTROL_NATIVE_IDS: [GlassId; 3] = [GlassId(100), GlassId(101), GlassId(102)];
+
+pub fn slot_index(id: GlassId) -> Option<usize> {
+    WINDOW_CONTROL_NATIVE_IDS.iter().position(|&x| x == id)
+}
 
 // Spring physics constants for bouncy clicks
 pub const PRESS_SCALE_OVERSHOOT: f32 = 1.18;
@@ -292,7 +301,8 @@ where
         .into()
 }
 
-/// Authentic liquid-glass colors and borders for traffic light buttons.
+/// Authentic liquid-glass colors and borders for traffic light buttons (fallback).
+#[allow(dead_code)]
 pub fn traffic_light_appearance(
     action: ControlAction,
     is_active: bool,
@@ -346,136 +356,234 @@ pub fn traffic_light_appearance(
 }
 
 /// Builds an individual Liquid Glass traffic light button.
-pub fn view_window_control<'a, Message: 'a, Renderer>(
-    action: ControlAction,
+pub fn window_control<'a, Message: Clone + 'static, Renderer>(
+    id: GlassId,
     size: f32,
-    scale: f32,
     scheme: UiColorScheme,
+    action: ControlAction,
+    show_glyph: bool,
+    disabled: bool,
+    interactive: bool,
     inactive: bool,
     hover_amount: f32,
     expand_behavior: WindowExpandBehavior,
+    scale: f32,
     on_action: Message,
-    on_press_start: Message,
-    on_press_end: Message,
+    on_press_start: Option<Message>,
+    on_press_cancel: Option<Message>,
+    on_press_end: Option<Message>,
 ) -> Element<'a, Message, Theme, Renderer>
 where
-    Message: Clone + 'a,
-    Renderer: advanced::Renderer + advanced_svg::Renderer + 'a,
+    Renderer: advanced::Renderer
+        + advanced_text::Renderer
+        + advanced_svg::Renderer
+        + liquid_glass::GlassForegroundRenderer
+        + 'static,
 {
     let visual_size = size * scale;
-    let is_dark = matches!(scheme, UiColorScheme::Dark);
-    let is_active = !inactive || hover_amount > 0.05;
+    let mut chrome: GlassChrome =
+        UiTheme::new(scheme).compositor_chrome(GlassRole::FloatingControl);
+    chrome.text = match scheme {
+        UiColorScheme::Light | UiColorScheme::Dark => {
+            liquid_glass::Color::rgba(0.22, 0.23, 0.25, 0.92)
+        }
+    };
+    let button = GlassButton::new(id, "", Rect::new(0.0, 0.0, visual_size, visual_size))
+        .shape(GlassShape::Circle)
+        .material(GlassMaterial::interactive())
+        .chrome({
+            chrome.pressed_overlay = liquid_glass::Color::transparent();
+            chrome
+        });
+    let button = if interactive {
+        button.into_element_with_press_callbacks::<Message, Theme, Renderer>(
+            on_action,
+            on_press_start,
+            on_press_cancel,
+            on_press_end,
+        )
+    } else {
+        button.into_element::<Message, Theme, Renderer>(on_action)
+    };
+    let status_dot = action == ControlAction::Close && disabled;
+    let button = centered(button, size);
+    let glyph = if status_dot {
+        let glyph_color = window_control_glyph_color(scheme, action, inactive, 1.0);
+        window_control_status_dot(glyph_color, visual_size)
+    } else {
+        let focus_amount = if show_glyph { hover_amount } else { 0.0 };
+        let glyph_color = window_control_glyph_color(scheme, action, inactive, focus_amount);
+        components::icon_tinted_with_opacity(
+            window_control_icon(action, expand_behavior),
+            window_control_glyph_size(action, size) * scale,
+            glyph_color,
+        )
+    };
 
-    let glyph_color = window_control_glyph_color(scheme, action, inactive, hover_amount);
-    let glyph_size = window_control_glyph_size(action, size) * scale;
-    let glyph = components::icon_tinted_with_opacity(
-        window_control_icon(action, expand_behavior),
-        glyph_size,
-        glyph_color,
-    );
-
-    let content: Element<'a, Message, Theme, Renderer> = centered(glyph, visual_size);
-
-    let btn: Element<'a, Message, Theme, Renderer> = button(content)
-        .padding(0)
-        .width(Length::Fixed(visual_size))
-        .height(Length::Fixed(visual_size))
-        .on_press(on_action)
-        .style(move |_theme: &Theme, status| {
-            let is_hover = matches!(status, button::Status::Hovered);
-            let is_press = matches!(status, button::Status::Pressed);
-            let (fill, stroke) = traffic_light_appearance(action, is_active, is_dark, is_hover, is_press);
-
-            button::Style {
-                background: Some(fill.into()),
-                border: iced::Border {
-                    color: stroke,
-                    width: 0.5,
-                    radius: (visual_size * 0.5).into(),
-                },
-                ..Default::default()
-            }
-        })
-        .into();
-
-    let btn_centered: Element<'a, Message, Theme, Renderer> = centered(btn, size);
-
-    mouse_area(btn_centered)
-        .on_press(on_press_start)
-        .on_release(on_press_end)
-        .into()
+    // Keep the button and its glyph in a stable tree shape. Changing from a
+    // single child to a button+glyph stack during hover would recreate the
+    // button's capture node exactly while a press is in flight.
+    components::glass_overlay(stack![button, centered(glyph, size)])
 }
 
-/// Renders the complete, authentic Apple Liquid Glass traffic lights row.
-pub fn view_traffic_lights<'a, Message: 'a, Renderer>(
-    state: &'a TrafficLightsState,
+/// Renders a group of three traffic light controls (Close, Minimize, Expand).
+pub fn control_group<'a, Message: Clone + 'static, Renderer>(
+    ids: [GlassId; 3],
+    size: f32,
+    gap: f32,
     scheme: UiColorScheme,
+    show_glyphs: bool,
+    close_disabled: bool,
+    interactive: bool,
     inactive: bool,
-    on_action: impl Fn(ControlAction) -> Message + Copy + 'a,
-    on_press_start: impl Fn(usize) -> Message + Copy + 'a,
-    on_press_end: impl Fn(usize) -> Message + Copy + 'a,
-    on_group_hover: impl Fn(bool) -> Message + Copy + 'a,
+    hover_amount: f32,
+    expand_behavior: WindowExpandBehavior,
+    press_scales: [f32; 3],
+    on_action: impl Fn(GlassId, ControlAction) -> Message + 'a,
+    on_press_start: impl Fn(GlassId) -> Message + 'a,
+    on_press_cancel: impl Fn(GlassId) -> Message + 'a,
+    on_press_end: impl Fn(GlassId) -> Message + 'a,
+    on_group_hover: impl Fn(bool) -> Message + 'a,
 ) -> Element<'a, Message, Theme, Renderer>
 where
-    Message: Clone + 'a,
-    Renderer: advanced::Renderer + advanced_svg::Renderer + 'a,
+    Renderer: advanced::Renderer
+        + advanced_text::Renderer
+        + advanced_svg::Renderer
+        + liquid_glass::GlassForegroundRenderer
+        + 'static,
 {
-    let size = WINDOW_CONTROL_NATIVE_SIZE;
-    let gap = WINDOW_CONTROL_GAP;
-
-    let close_btn = view_window_control(
-        ControlAction::Close,
-        size,
-        state.press_springs[0].value(),
-        scheme,
-        inactive,
-        state.hover_progress,
-        state.expand_behavior,
-        on_action(ControlAction::Close),
-        on_press_start(0),
-        on_press_end(0),
-    );
-
-    let min_btn = view_window_control(
-        ControlAction::Minimize,
-        size,
-        state.press_springs[1].value(),
-        scheme,
-        inactive,
-        state.hover_progress,
-        state.expand_behavior,
-        on_action(ControlAction::Minimize),
-        on_press_start(1),
-        on_press_end(1),
-    );
-
-    let zoom_btn = view_window_control(
-        ControlAction::Expand,
-        size,
-        state.press_springs[2].value(),
-        scheme,
-        inactive,
-        state.hover_progress,
-        state.expand_behavior,
-        on_action(ControlAction::Expand),
-        on_press_start(2),
-        on_press_end(2),
-    );
-
-    let controls = row![close_btn, min_btn, zoom_btn].spacing(gap).align_y(Alignment::Center);
-
+    let controls = row![
+        window_control(
+            ids[0],
+            size,
+            scheme,
+            ControlAction::Close,
+            show_glyphs,
+            close_disabled,
+            interactive,
+            inactive,
+            hover_amount,
+            expand_behavior,
+            press_scales[0],
+            on_action(ids[0], ControlAction::Close),
+            Some(on_press_start(ids[0])),
+            Some(on_press_cancel(ids[0])),
+            Some(on_press_end(ids[0])),
+        ),
+        window_control(
+            ids[1],
+            size,
+            scheme,
+            ControlAction::Minimize,
+            show_glyphs,
+            false,
+            interactive,
+            inactive,
+            hover_amount,
+            expand_behavior,
+            press_scales[1],
+            on_action(ids[1], ControlAction::Minimize),
+            Some(on_press_start(ids[1])),
+            Some(on_press_cancel(ids[1])),
+            Some(on_press_end(ids[1])),
+        ),
+        window_control(
+            ids[2],
+            size,
+            scheme,
+            ControlAction::Expand,
+            show_glyphs,
+            false,
+            interactive,
+            inactive,
+            hover_amount,
+            expand_behavior,
+            press_scales[2],
+            on_action(ids[2], ControlAction::Expand),
+            Some(on_press_start(ids[2])),
+            Some(on_press_cancel(ids[2])),
+            Some(on_press_end(ids[2])),
+        ),
+    ]
+    .spacing(gap);
     let slop = control_hover_slop(size);
     let group_width = size * 3.0 + gap * 2.0;
-
     let tracking_area = container(controls)
         .width(Length::Fixed(group_width + slop * 2.0))
         .height(Length::Fixed(size + slop * 2.0))
-        .padding(Padding { top: slop, right: slop, bottom: slop, left: slop });
-
+        .padding(Padding {
+            top: slop,
+            right: slop,
+            bottom: slop,
+            left: slop,
+        });
     mouse_area(tracking_area)
         .on_enter(on_group_hover(true))
         .on_exit(on_group_hover(false))
         .into()
+}
+
+/// Helper to position a control group with optical slop compensation.
+pub fn positioned_control_group<'a, Message: 'a, Renderer: advanced::Renderer + 'a>(
+    content: Element<'a, Message, Theme, Renderer>,
+    x: f32,
+    y: f32,
+    size: f32,
+) -> Element<'a, Message, Theme, Renderer> {
+    let slop = control_hover_slop(size);
+    container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(Padding {
+            top: y - slop,
+            right: 0.0,
+            bottom: 0.0,
+            left: x - slop,
+        })
+        .into()
+}
+
+/// Renders the complete, authentic Apple Liquid Glass traffic lights row.
+pub fn view_traffic_lights<'a, Message: Clone + 'static, Renderer>(
+    state: &'a TrafficLightsState,
+    scheme: UiColorScheme,
+    inactive: bool,
+    on_action: impl Fn(ControlAction) -> Message + 'a,
+    on_press_start: impl Fn(usize) -> Message + 'a,
+    on_press_cancel: impl Fn(usize) -> Message + 'a,
+    on_press_end: impl Fn(usize) -> Message + 'a,
+    on_group_hover: impl Fn(bool) -> Message + 'a,
+) -> Element<'a, Message, Theme, Renderer>
+where
+    Renderer: advanced::Renderer
+        + advanced_text::Renderer
+        + advanced_svg::Renderer
+        + liquid_glass::GlassForegroundRenderer
+        + 'static,
+{
+    let press_scales = [
+        state.press_springs[0].value(),
+        state.press_springs[1].value(),
+        state.press_springs[2].value(),
+    ];
+    control_group(
+        WINDOW_CONTROL_NATIVE_IDS,
+        WINDOW_CONTROL_NATIVE_SIZE,
+        WINDOW_CONTROL_GAP,
+        scheme,
+        true,
+        false,
+        true,
+        inactive,
+        state.hover_progress,
+        state.expand_behavior,
+        press_scales,
+        move |_id, action| on_action(action),
+        move |id| on_press_start(slot_index(id).unwrap_or(0)),
+        move |id| on_press_cancel(slot_index(id).unwrap_or(0)),
+        move |id| on_press_end(slot_index(id).unwrap_or(0)),
+        on_group_hover,
+    )
 }
 
 #[cfg(test)]

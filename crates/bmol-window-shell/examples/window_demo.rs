@@ -20,10 +20,19 @@ use iced::window;
 use iced::{Alignment, Color, Element, Length, Padding, Size, Subscription, Task, Theme};
 use liquid_glass::UiColorScheme;
 
+#[path = "playground/iced_backend.rs"]
+mod iced_backend;
+
+use iced_backend::{DemoSurface, Renderer};
+
 #[path = "playground/window_controls.rs"]
 pub mod window_controls;
 
-use window_controls::{ControlAction, TrafficLightsState};
+use window_controls::{
+    ControlAction, TrafficLightsState, WINDOW_CONTROL_NATIVE_IDS, WINDOW_CONTROL_NATIVE_SIZE,
+};
+
+type AppElement<'a> = Element<'a, Message, Theme, Renderer>;
 
 /// Standard Apple Titlebar Font (SF Pro Text for Latin, PingFang SC for Chinese).
 ///
@@ -105,6 +114,7 @@ enum Message {
     WindowControl(ControlAction),
     TrafficLightsHover(bool),
     TrafficLightsPressStart(usize),
+    TrafficLightsPressCancel(usize),
     TrafficLightsPressEnd(usize),
     AnimationFrame(std::time::Instant),
     WindowFocused(bool),
@@ -219,11 +229,49 @@ impl DemoState {
             &config,
         );
     }
+
+    fn sync_window_controls_backend(&self) {
+        let scheme = if self.is_dark() {
+            UiColorScheme::Dark
+        } else {
+            UiColorScheme::Light
+        };
+        iced_backend::set_color_scheme(scheme);
+        iced_backend::set_window_inactive(!self.window_focused);
+
+        let origin_y = match self.layout_selection {
+            LayoutSelection::Separate => {
+                (self.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
+            }
+            LayoutSelection::UnifiedSinglePane | LayoutSelection::UnifiedMultiPane => {
+                (self.unified_header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
+            }
+        };
+        iced_backend::set_window_control_origin(18.0, origin_y);
+    }
 }
 
 fn boot() -> (DemoState, Task<Message>) {
+    let state = DemoState::default();
+    iced_backend::set_surface(DemoSurface::WindowDemo);
+    let scheme = if state.is_dark() {
+        UiColorScheme::Dark
+    } else {
+        UiColorScheme::Light
+    };
+    iced_backend::set_color_scheme(scheme);
+    iced_backend::set_accessibility(liquid_glass::GlassAccessibility::none());
+    iced_backend::set_window_inactive(!state.window_focused);
+    iced_backend::set_window_control_group_progress(0, 0.0);
+    for id in WINDOW_CONTROL_NATIVE_IDS {
+        iced_backend::set_window_control_press_progress(id, 0.0);
+        iced_backend::set_window_control_scale(id, 1.0);
+    }
+    let origin_y = (state.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5;
+    iced_backend::set_window_control_origin(18.0, origin_y);
+
     (
-        DemoState::default(),
+        state,
         iced::system::theme().map(Message::SystemThemeChanged),
     )
 }
@@ -485,27 +533,53 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
         }
         Message::TrafficLightsHover(hovered) => {
             state.traffic_lights.on_group_hover(hovered);
+            iced_backend::set_window_control_group_hover(0, hovered);
             Task::none()
         }
         Message::TrafficLightsPressStart(index) => {
             state.traffic_lights.on_press_start(index);
+            if let Some(&id) = WINDOW_CONTROL_NATIVE_IDS.get(index) {
+                iced_backend::set_window_control_press_progress(id, 1.0);
+            }
+            Task::none()
+        }
+        Message::TrafficLightsPressCancel(index) => {
+            state.traffic_lights.on_press_cancel(index);
+            if let Some(&id) = WINDOW_CONTROL_NATIVE_IDS.get(index) {
+                iced_backend::set_window_control_press_progress(id, 0.0);
+                iced_backend::set_window_control_scale(id, 1.0);
+            }
             Task::none()
         }
         Message::TrafficLightsPressEnd(index) => {
             state.traffic_lights.on_press_end(index);
+            if let Some(&id) = WINDOW_CONTROL_NATIVE_IDS.get(index) {
+                iced_backend::set_window_control_press_progress(id, 0.0);
+            }
             Task::none()
         }
         Message::AnimationFrame(now) => {
             state.traffic_lights.step(now);
+            iced_backend::set_window_control_group_progress(0, state.traffic_lights.hover_progress);
+            for (index, &id) in WINDOW_CONTROL_NATIVE_IDS.iter().enumerate() {
+                let scale = state.traffic_lights.press_springs[index].value();
+                iced_backend::set_window_control_scale(id, scale);
+                iced_backend::set_window_control_press_progress(
+                    id,
+                    state.traffic_lights.press_targets[index],
+                );
+            }
             Task::none()
         }
         Message::WindowFocused(focused) => {
             state.window_focused = focused;
+            iced_backend::set_window_inactive(!focused);
             Task::none()
         }
     };
 
     state.update_metrics();
+    state.sync_window_controls_backend();
     task
 }
 
@@ -531,7 +605,7 @@ fn subscription(state: &DemoState) -> Subscription<Message> {
     ])
 }
 
-fn view(state: &DemoState) -> Element<'_, Message> {
+fn view(state: &DemoState) -> AppElement<'_> {
     let plan = ChromeDrawPlan::from_metrics(&state.metrics);
 
     let content = match state.layout_selection {
@@ -558,7 +632,7 @@ fn view(state: &DemoState) -> Element<'_, Message> {
 // Hand-crafted Apple-style Liquid Glass Traffic Lights (Close / Minimize / Zoom)
 // =========================================================================
 
-fn view_traffic_lights<'a>(state: &'a DemoState) -> Element<'a, Message> {
+fn view_traffic_lights<'a>(state: &'a DemoState) -> AppElement<'a> {
     let scheme = if state.is_dark() {
         UiColorScheme::Dark
     } else {
@@ -572,12 +646,13 @@ fn view_traffic_lights<'a>(state: &'a DemoState) -> Element<'a, Message> {
         inactive,
         Message::WindowControl,
         Message::TrafficLightsPressStart,
+        Message::TrafficLightsPressCancel,
         Message::TrafficLightsPressEnd,
         Message::TrafficLightsHover,
     )
 }
 
-fn view_theme_toggle(state: &DemoState) -> Element<'_, Message> {
+fn view_theme_toggle(state: &DemoState) -> AppElement<'_> {
     let make_item = |label: &'static str, pref: ThemePreference| {
         let is_active = state.theme_preference == pref;
         let is_dark = state.is_dark();
@@ -658,8 +733,8 @@ fn view_theme_toggle(state: &DemoState) -> Element<'_, Message> {
 /// click hits an interactive widget, the widget naturally consumes the event.
 fn loyal_drag_bar<'a>(
     height: f32,
-    content: impl Into<Element<'a, Message>>,
-) -> Element<'a, Message> {
+    content: impl Into<AppElement<'a>>,
+) -> AppElement<'a> {
     mouse_area(
         container(content.into())
             .width(Length::Fill)
@@ -674,7 +749,7 @@ fn loyal_drag_bar<'a>(
     .into()
 }
 
-fn view_layout_toggle(state: &DemoState) -> Element<'_, Message> {
+fn view_layout_toggle(state: &DemoState) -> AppElement<'_> {
     let make_item = |label: &'static str, layout: LayoutSelection| {
         let is_active = state.layout_selection == layout;
         let is_dark = state.is_dark();
@@ -750,7 +825,7 @@ fn view_layout_toggle(state: &DemoState) -> Element<'_, Message> {
 // Layout 1: Standalone Titlebar (Separate) - 32px White Bar, 16px Clearance
 // =========================================================================
 
-fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
+fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<'_> {
     let titlebar_height = state.metrics.header_rect.height;
     let is_dark = state.is_dark();
 
@@ -814,8 +889,8 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
     .align_y(Alignment::Center);
 
     let titlebar_content = row![
-        // 1. Left leading edge margin (10px + 6px slop = 16px to circle edge)
-        column![].width(Length::Fixed(10.0)),
+        // 1. Left leading edge margin (12px + 6px slop = 18px to circle edge, matching GPU origin_x = 18.0)
+        column![].width(Length::Fixed(12.0)),
         // 2. Custom Apple traffic lights
         view_traffic_lights(state),
         // 3. Exactly 16px clearance between traffic lights and title (10px + 6px slop = 16px)
@@ -915,7 +990,7 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
 // anywhere the user clicks outside interactive buttons.
 // =========================================================================
 
-fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
+fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<'_> {
     let header_height = state.metrics.header_rect.height;
     let is_dark = state.is_dark();
     let bg_color = if is_dark {
@@ -932,7 +1007,7 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element
 
     // 1. Top Header Area (Transparent canvas, owned by downstream application)
     let header_content = row![
-        column![].width(Length::Fixed(10.0)),
+        column![].width(Length::Fixed(12.0)),
         view_traffic_lights(state),
         column![].width(Length::Fixed(14.0)),
         text(match state.active_tab {
@@ -1026,12 +1101,12 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element
 // remains faithful: dragging beneath any widget moves the window.
 // =========================================================================
 
-fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
+fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<'_> {
     let header_height = state.metrics.header_rect.height;
     let is_dark = state.is_dark();
 
     let sidebar_header_content = row![
-        column![].width(Length::Fixed(10.0)),
+        column![].width(Length::Fixed(12.0)),
         view_traffic_lights(state),
         space::horizontal().width(Length::Fill),
     ]
@@ -1188,7 +1263,7 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element<
 // Shared Components: Sidebar Items & Content Cards
 // =========================================================================
 
-fn view_sidebar_items(state: &DemoState) -> Element<'_, Message> {
+fn view_sidebar_items(state: &DemoState) -> AppElement<'_> {
     let tabs = [
         ("Architecture", "Window Shell overview"),
         ("Hitboxes & Layout", "Collision & insets clearance"),
@@ -1299,7 +1374,7 @@ fn view_sidebar_items(state: &DemoState) -> Element<'_, Message> {
         .into()
 }
 
-fn view_content_cards(state: &DemoState) -> Element<'_, Message> {
+fn view_content_cards(state: &DemoState) -> AppElement<'_> {
     let cards = match state.active_tab {
         0 => view_tab_architecture(state),
         1 => view_tab_hitboxes_and_layout(state),
@@ -1321,7 +1396,7 @@ fn view_content_cards(state: &DemoState) -> Element<'_, Message> {
     .into()
 }
 
-fn view_tab_architecture(state: &DemoState) -> Element<'_, Message> {
+fn view_tab_architecture(state: &DemoState) -> AppElement<'_> {
     let card_layout = card(
         "Window Chrome Layout Modes",
         "Choose between a standalone top titlebar or an integrated unified chrome.",
@@ -1467,7 +1542,7 @@ fn view_tab_architecture(state: &DemoState) -> Element<'_, Message> {
     column![card_layout, card_height_config, card_blur].spacing(16).into()
 }
 
-fn view_tab_hitboxes_and_layout(state: &DemoState) -> Element<'_, Message> {
+fn view_tab_hitboxes_and_layout(state: &DemoState) -> AppElement<'_> {
     let metrics = &state.metrics;
 
     let card_toggle = card(
@@ -1562,7 +1637,7 @@ fn view_tab_hitboxes_and_layout(state: &DemoState) -> Element<'_, Message> {
     column![card_toggle, card_table].spacing(16).into()
 }
 
-fn view_tab_edr(_state: &DemoState) -> Element<'_, Message> {
+fn view_tab_edr(_state: &DemoState) -> AppElement<'_> {
     let card = card(
         "Extended Dynamic Range (EDR)",
         "CAMetalLayer 16-bit float linear color space configuration.",
@@ -1591,7 +1666,7 @@ fn view_tab_edr(_state: &DemoState) -> Element<'_, Message> {
     column![card].spacing(16).into()
 }
 
-fn view_tab_stage_manager(_state: &DemoState) -> Element<'_, Message> {
+fn view_tab_stage_manager(_state: &DemoState) -> AppElement<'_> {
     let card = card(
         "Stage Manager Blur Preservation",
         "Prevents translucent window flash during macOS Stage Manager and Mission Control transitions.",
@@ -1618,7 +1693,7 @@ fn view_tab_stage_manager(_state: &DemoState) -> Element<'_, Message> {
     column![card].spacing(16).into()
 }
 
-fn view_hitboxes_overlay_banner(metrics: &WindowChromeMetrics) -> Element<'_, Message> {
+fn view_hitboxes_overlay_banner(metrics: &WindowChromeMetrics) -> AppElement<'_> {
     let banner = row![
         text("HITBOX OVERLAY ACTIVE:").size(11).color(Color::from_rgb(1.0, 0.8, 0.2)),
         text(format!(
@@ -1660,8 +1735,8 @@ fn view_hitboxes_overlay_banner(metrics: &WindowChromeMetrics) -> Element<'_, Me
 fn card<'a>(
     title: &'static str,
     subtitle: &'static str,
-    content: impl Into<Element<'a, Message>>,
-) -> Element<'a, Message> {
+    content: impl Into<AppElement<'a>>,
+) -> AppElement<'a> {
     let body = column![
         column![
             text(title).size(15),
@@ -1705,8 +1780,8 @@ fn card<'a>(
         .into()
 }
 
-fn card_divider<'a>() -> Element<'a, Message> {
-    container(column![])
+fn card_divider<'a>() -> AppElement<'a> {
+    container(space())
         .height(Length::Fixed(1.0))
         .width(Length::Fill)
         .style(|theme| {
@@ -1749,7 +1824,9 @@ fn style(state: &DemoState, _theme: &Theme) -> iced::theme::Style {
 }
 
 fn main() -> iced::Result {
-    iced::application(boot, update, view)
+    let fonts = liquid_glass::ui::font::ui_fonts();
+    let mut app = iced::application::<DemoState, Message, Theme, Renderer>(boot, update, view)
+        .title("BMOL Window Shell")
         .subscription(subscription)
         .theme(theme)
         .style(style)
@@ -1762,8 +1839,11 @@ fn main() -> iced::Result {
             blur: true,
             decorations: false, // Pure frameless! 100% black-border free!
             ..Default::default()
-        })
-        .run()
+        });
+    for bytes in &fonts.bytes {
+        app = app.font(bytes.clone());
+    }
+    app.run()
 }
 
 

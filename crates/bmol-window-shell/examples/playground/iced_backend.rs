@@ -3,7 +3,7 @@ use std::{
     fmt,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU8, Ordering},
+        atomic::{AtomicBool, AtomicU8, Ordering},
     },
     time::Instant,
 };
@@ -87,6 +87,7 @@ pub enum DemoSurface {
     #[default]
     Settings,
     WindowControls,
+    WindowDemo,
 }
 
 /// Runtime optical controls for the standalone window-controls laboratory.
@@ -210,6 +211,31 @@ static ACTIVE_WINDOW_CONTROL_PRESS_PROGRESS: Mutex<[f32; 15]> = Mutex::new([0.0;
 static ACTIVE_WINDOW_CONTROL_SCALE: Mutex<[f32; 15]> = Mutex::new([1.0; 15]);
 static ACTIVE_WINDOW_CONTROL_TUNING: Mutex<WindowControlTuning> =
     Mutex::new(WindowControlTuning::new());
+static ACTIVE_WINDOW_CONTROL_ORIGIN: Mutex<(f32, f32)> =
+    Mutex::new((WINDOW_CONTROL_NATIVE_X, WINDOW_CONTROL_NATIVE_Y));
+static ACTIVE_WINDOW_INACTIVE: AtomicBool = AtomicBool::new(false);
+
+#[allow(dead_code)]
+pub fn set_window_control_origin(x: f32, y: f32) {
+    if let Ok(mut origin) = ACTIVE_WINDOW_CONTROL_ORIGIN.lock() {
+        *origin = (x, y);
+    }
+}
+
+pub fn active_window_control_origin() -> (f32, f32) {
+    ACTIVE_WINDOW_CONTROL_ORIGIN
+        .lock()
+        .map_or((WINDOW_CONTROL_NATIVE_X, WINDOW_CONTROL_NATIVE_Y), |val| *val)
+}
+
+#[allow(dead_code)]
+pub fn set_window_inactive(inactive: bool) {
+    ACTIVE_WINDOW_INACTIVE.store(inactive, Ordering::Relaxed);
+}
+
+pub fn is_window_inactive() -> bool {
+    ACTIVE_WINDOW_INACTIVE.load(Ordering::Relaxed)
+}
 
 pub fn set_color_scheme(scheme: UiColorScheme) {
     ACTIVE_COLOR_SCHEME.store(
@@ -261,6 +287,7 @@ pub fn set_surface(surface: DemoSurface) {
         match surface {
             DemoSurface::Settings => 0,
             DemoSurface::WindowControls => 1,
+            DemoSurface::WindowDemo => 2,
         },
         Ordering::Relaxed,
     );
@@ -315,6 +342,7 @@ pub fn set_window_control_scale(id: GlassId, scale: f32) {
 fn active_surface() -> DemoSurface {
     match ACTIVE_SURFACE.load(Ordering::Relaxed) {
         1 => DemoSurface::WindowControls,
+        2 => DemoSurface::WindowDemo,
         _ => DemoSurface::Settings,
     }
 }
@@ -1274,6 +1302,16 @@ impl graphics::Compositor for Compositor {
                         .map(|id| (id, renderer.glass_interaction(id)))
                         .collect::<Vec<_>>(),
                 ),
+                DemoSurface::WindowDemo => window_demo_scene(
+                    size,
+                    viewport.scale_factor(),
+                    color_scheme,
+                    active_window_control_tuning(),
+                    WINDOW_CONTROL_NATIVE_IDS
+                        .into_iter()
+                        .map(|id| (id, renderer.glass_interaction(id)))
+                        .collect::<Vec<_>>(),
+                ),
             }
         };
         let scene_built = Instant::now();
@@ -1598,6 +1636,34 @@ fn window_controls_scene(
         WINDOW_CONTROL_LARGE_GAP,
         false,
         true,
+        color_scheme,
+        tuning,
+        &interactions,
+    );
+    scale_scene(&mut scene, scale_factor);
+    scene
+}
+
+fn window_demo_scene(
+    _size: GpuSize,
+    scale_factor: f32,
+    color_scheme: UiColorScheme,
+    tuning: WindowControlTuning,
+    interactions: Vec<(GlassId, GlassInteraction)>,
+) -> GlassScene {
+    let mut scene = GlassScene::default();
+    let scale_factor = scale_factor.max(1.0);
+    let (origin_x, origin_y) = active_window_control_origin();
+    let inactive = is_window_inactive();
+    push_traffic_light_group(
+        &mut scene,
+        &WINDOW_CONTROL_NATIVE_IDS,
+        origin_x,
+        origin_y,
+        WINDOW_CONTROL_NATIVE_SIZE,
+        WINDOW_CONTROL_GAP,
+        inactive,
+        false,
         color_scheme,
         tuning,
         &interactions,
