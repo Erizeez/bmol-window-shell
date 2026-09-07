@@ -24,12 +24,22 @@ enum LayoutSelection {
     Unified,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum ThemePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 #[derive(Debug, Clone)]
 enum Message {
     WindowOpened(window::Id),
     WindowResized(Size),
     TabSelected(usize),
     SelectLayout(LayoutSelection),
+    SelectTheme(ThemePreference),
+    SystemThemeChanged(iced::theme::Mode),
     SeparateHeightChanged(f32),
     UnifiedHeightChanged(f32),
     ToggleHitboxes(bool),
@@ -52,6 +62,8 @@ struct DemoState {
     window_size: Size,
     active_tab: usize,
     layout_selection: LayoutSelection,
+    theme_preference: ThemePreference,
+    system_theme: iced::theme::Mode,
     separate_titlebar_height: f32,
     unified_header_height: f32,
     sidebar_width: f32,
@@ -76,6 +88,8 @@ impl Default for DemoState {
             window_size: Size::new(980.0, 640.0),
             active_tab: 0,
             layout_selection: LayoutSelection::Separate,
+            theme_preference: ThemePreference::System,
+            system_theme: iced::theme::Mode::Dark,
             separate_titlebar_height: 32.0,
             unified_header_height: 54.0,
             sidebar_width: 220.0,
@@ -93,6 +107,29 @@ impl Default for DemoState {
 }
 
 impl DemoState {
+    fn effective_mode(&self) -> iced::theme::Mode {
+        match self.theme_preference {
+            ThemePreference::System => match self.system_theme {
+                iced::theme::Mode::Light => iced::theme::Mode::Light,
+                _ => iced::theme::Mode::Dark,
+            },
+            ThemePreference::Light => iced::theme::Mode::Light,
+            ThemePreference::Dark => iced::theme::Mode::Dark,
+        }
+    }
+
+    fn is_dark(&self) -> bool {
+        self.effective_mode() != iced::theme::Mode::Light
+    }
+
+    fn native_appearance(&self) -> bmol_window_shell::WindowAppearance {
+        match self.theme_preference {
+            ThemePreference::System => bmol_window_shell::WindowAppearance::System,
+            ThemePreference::Light => bmol_window_shell::WindowAppearance::Light,
+            ThemePreference::Dark => bmol_window_shell::WindowAppearance::Dark,
+        }
+    }
+
     fn update_metrics(&mut self) {
         let config = match self.layout_selection {
             LayoutSelection::Separate => {
@@ -111,7 +148,10 @@ impl DemoState {
 }
 
 fn boot() -> (DemoState, Task<Message>) {
-    (DemoState::default(), Task::none())
+    (
+        DemoState::default(),
+        iced::system::theme().map(Message::SystemThemeChanged),
+    )
 }
 
 fn update(state: &mut DemoState, message: Message) -> Task<Message> {
@@ -122,6 +162,7 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
             let radius = state.corner_radius;
             let edr = state.edr_enabled;
             let shadow = state.system_shadow;
+            let appearance = state.native_appearance();
 
             window::run(id, move |w| {
                 if let Ok(handle) = w.window_handle() {
@@ -130,6 +171,7 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
                         bmol_window_shell::install_stage_manager_guard(target);
                         bmol_window_shell::configure_window_corner_radius(target, radius);
                         bmol_window_shell::configure_window_shadow(target, shadow);
+                        bmol_window_shell::configure_window_appearance(target, appearance);
                         bmol_window_shell::configure_extended_dynamic_range(target, edr);
                         bmol_window_shell::refresh_desktop_blur(target);
                     }
@@ -147,6 +189,27 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
         }
         Message::SelectLayout(layout) => {
             state.layout_selection = layout;
+            Task::none()
+        }
+        Message::SelectTheme(pref) => {
+            state.theme_preference = pref;
+            let appearance = state.native_appearance();
+            if let Some(id) = state.window_id {
+                window::run(id, move |w| {
+                    if let Ok(handle) = w.window_handle() {
+                        let rwh = handle.as_raw();
+                        if let Some(target) = bmol_window_shell::desktop_blur_target(rwh) {
+                            bmol_window_shell::configure_window_appearance(target, appearance);
+                        }
+                    }
+                })
+                .discard()
+            } else {
+                Task::none()
+            }
+        }
+        Message::SystemThemeChanged(mode) => {
+            state.system_theme = mode;
             Task::none()
         }
         Message::SeparateHeightChanged(h) => {
@@ -311,6 +374,7 @@ fn subscription(_state: &DemoState) -> Subscription<Message> {
     Subscription::batch([
         window::open_events().map(Message::WindowOpened),
         window::resize_events().map(|(_id, size)| Message::WindowResized(size)),
+        iced::system::theme_changes().map(Message::SystemThemeChanged),
     ])
 }
 
@@ -390,14 +454,110 @@ fn view_traffic_lights() -> Element<'static, Message> {
         .into()
 }
 
+fn view_theme_toggle(state: &DemoState) -> Element<'_, Message> {
+    let make_item = |label: &'static str, pref: ThemePreference| {
+        let is_active = state.theme_preference == pref;
+        let is_dark = state.is_dark();
+        button(text(label).size(11))
+            .padding([3, 7])
+            .on_press(Message::SelectTheme(pref))
+            .style(move |_theme, status| {
+                if is_active {
+                    button::Style {
+                        background: Some(Color::from_rgba(0.0, 0.48, 1.0, 0.85).into()),
+                        text_color: Color::WHITE,
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                } else {
+                    let is_hover = matches!(status, button::Status::Hovered);
+                    button::Style {
+                        background: if is_hover {
+                            Some(if is_dark {
+                                Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
+                            } else {
+                                Color::from_rgba(0.0, 0.0, 0.0, 0.06).into()
+                            })
+                        } else {
+                            None
+                        },
+                        text_color: if is_dark {
+                            Color::from_rgb(0.65, 0.65, 0.70)
+                        } else {
+                            Color::from_rgb(0.35, 0.36, 0.40)
+                        },
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                }
+            })
+    };
+
+    let container_bg = if state.is_dark() {
+        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+    } else {
+        Color::from_rgba(0.0, 0.0, 0.0, 0.05)
+    };
+
+    container(
+        row![
+            make_item("Auto", ThemePreference::System),
+            make_item("Light", ThemePreference::Light),
+            make_item("Dark", ThemePreference::Dark),
+        ]
+        .spacing(2)
+        .align_y(Alignment::Center),
+    )
+    .padding(2)
+    .style(move |_theme| container::Style {
+        background: Some(container_bg.into()),
+        border: iced::Border {
+            radius: 6.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .into()
+}
+
 // =========================================================================
 // Layout 1: Standalone Titlebar (Separate) - 32px White Bar, 16px Clearance
 // =========================================================================
 
 fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, Message> {
     let titlebar_height = state.metrics.header_rect.height;
+    let is_dark = state.is_dark();
+
+    let titlebar_bg = if is_dark {
+        Color::from_rgba(0.14, 0.15, 0.18, 0.98)
+    } else {
+        Color::from_rgba(1.0, 1.0, 1.0, 0.98)
+    };
+    let title_color = if is_dark {
+        Color::from_rgb(0.92, 0.92, 0.95)
+    } else {
+        Color::from_rgb(0.12, 0.13, 0.15)
+    };
+    let sidebar_bg = if is_dark {
+        Color::from_rgba(0.09, 0.10, 0.12, 0.5)
+    } else {
+        Color::from_rgba(0.94, 0.94, 0.96, 0.7)
+    };
+    let workspace_bg = if is_dark {
+        Color::from_rgba(0.12, 0.13, 0.16, state.opacity)
+    } else {
+        Color::from_rgba(0.98, 0.98, 1.0, state.opacity)
+    };
 
     let mode_switch = row![
+        view_theme_toggle(state),
+        column![].width(Length::Fixed(6.0)),
         button(text("Separate (Active)").size(11))
             .padding([3, 8])
             .style(|_theme, _status| button::Style {
@@ -413,16 +573,28 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
         button(text("Switch to Unified").size(11))
             .padding([3, 8])
             .on_press(Message::SelectLayout(LayoutSelection::Unified))
-            .style(|_theme, status| button::Style {
+            .style(move |_theme, status| button::Style {
                 background: if matches!(status, button::Status::Hovered) {
-                    Some(Color::from_rgba(0.0, 0.0, 0.0, 0.05).into())
+                    Some(if is_dark {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
+                    } else {
+                        Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
+                    })
                 } else {
                     None
                 },
-                text_color: Color::from_rgb(0.35, 0.36, 0.40),
+                text_color: if is_dark {
+                    Color::from_rgb(0.7, 0.7, 0.75)
+                } else {
+                    Color::from_rgb(0.35, 0.36, 0.40)
+                },
                 border: iced::Border {
                     radius: 4.0.into(),
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.10),
+                    color: if is_dark {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                    } else {
+                        Color::from_rgba(0.0, 0.0, 0.0, 0.10)
+                    },
                     width: 1.0,
                 },
                 ..Default::default()
@@ -430,16 +602,28 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
         button(text("Reset").size(11))
             .padding([3, 8])
             .on_press(Message::ResetDefaults)
-            .style(|_theme, status| button::Style {
+            .style(move |_theme, status| button::Style {
                 background: if matches!(status, button::Status::Hovered) {
-                    Some(Color::from_rgba(0.0, 0.0, 0.0, 0.05).into())
+                    Some(if is_dark {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
+                    } else {
+                        Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
+                    })
                 } else {
                     None
                 },
-                text_color: Color::from_rgb(0.35, 0.36, 0.40),
+                text_color: if is_dark {
+                    Color::from_rgb(0.7, 0.7, 0.75)
+                } else {
+                    Color::from_rgb(0.35, 0.36, 0.40)
+                },
                 border: iced::Border {
                     radius: 4.0.into(),
-                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.10),
+                    color: if is_dark {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                    } else {
+                        Color::from_rgba(0.0, 0.0, 0.0, 0.10)
+                    },
                     width: 1.0,
                 },
                 ..Default::default()
@@ -455,10 +639,10 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
         view_traffic_lights(),
         // 3. Exactly 16px clearance between traffic lights and title
         column![].width(Length::Fixed(16.0)),
-        // 4. Left-aligned title text (sharp dark text on white titlebar)
+        // 4. Left-aligned title text (adaptive sharp text on titlebar)
         text("BMOL Window Shell")
             .size(13)
-            .color(Color::from_rgb(0.12, 0.13, 0.15)),
+            .color(title_color),
         // 5. Draggable titlebar area in the center: drag window anywhere here
         button(space::horizontal().height(Length::Fill))
             .padding(0)
@@ -478,8 +662,8 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
     .width(Length::Fill);
 
     let titlebar_container = container(titlebar_content)
-        .style(|_theme| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.98).into()),
+        .style(move |_theme| container::Style {
+            background: Some(titlebar_bg.into()),
             border: iced::Border {
                 radius: iced::border::Radius {
                     top_left: 16.0,
@@ -502,8 +686,8 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
         container(sidebar)
             .width(Length::Fixed(state.sidebar_width))
             .height(Length::Fill)
-            .style(|_theme| container::Style {
-                background: Some(Color::from_rgba(0.09, 0.10, 0.12, 0.5).into()),
+            .style(move |_theme| container::Style {
+                background: Some(sidebar_bg.into()),
                 border: iced::Border {
                     radius: iced::border::Radius {
                         top_left: 0.0,
@@ -519,7 +703,7 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
             .width(Length::Fill)
             .height(Length::Fill)
             .style(move |_theme| container::Style {
-                background: Some(Color::from_rgba(0.12, 0.13, 0.16, state.opacity).into()),
+                background: Some(workspace_bg.into()),
                 border: iced::Border {
                     radius: iced::border::Radius {
                         top_left: 0.0,
@@ -573,11 +757,23 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
     .spacing(12)
     .height(Length::Fill);
 
+    let is_dark = state.is_dark();
+    let unified_sidebar_bg = if is_dark {
+        Color::from_rgba(0.08, 0.09, 0.11, 0.65)
+    } else {
+        Color::from_rgba(0.92, 0.93, 0.95, 0.85)
+    };
+    let unified_workspace_bg = if is_dark {
+        Color::from_rgba(0.12, 0.13, 0.16, state.opacity)
+    } else {
+        Color::from_rgba(0.98, 0.98, 1.0, state.opacity)
+    };
+
     let sidebar_container = container(sidebar_inner)
         .width(Length::Fixed(state.sidebar_width))
         .height(Length::Fill)
-        .style(|_theme| container::Style {
-            background: Some(Color::from_rgba(0.08, 0.09, 0.11, 0.65).into()),
+        .style(move |_theme| container::Style {
+            background: Some(unified_sidebar_bg.into()),
             border: iced::Border {
                 radius: iced::border::Radius {
                     top_left: 16.0,
@@ -612,16 +808,26 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
                 ..Default::default()
             }),
         row![
+            view_theme_toggle(state),
+            column![].width(Length::Fixed(6.0)),
             button(text("Switch to Separate").size(11))
                 .padding([4, 8])
                 .on_press(Message::SelectLayout(LayoutSelection::Separate))
-                .style(|_theme, status| button::Style {
+                .style(move |_theme, status| button::Style {
                     background: if matches!(status, button::Status::Hovered) {
-                        Some(Color::from_rgba(1.0, 1.0, 1.0, 0.1).into())
+                        Some(if is_dark {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.1).into()
+                        } else {
+                            Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
+                        })
                     } else {
                         None
                     },
-                    text_color: Color::from_rgb(0.7, 0.7, 0.75),
+                    text_color: if is_dark {
+                        Color::from_rgb(0.7, 0.7, 0.75)
+                    } else {
+                        Color::from_rgb(0.35, 0.36, 0.40)
+                    },
                     border: iced::Border {
                         radius: 4.0.into(),
                         ..Default::default()
@@ -635,8 +841,7 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
                     text_color: Color::from_rgb(0.4, 0.8, 1.0),
                     border: iced::Border {
                         radius: 4.0.into(),
-                        color: Color::from_rgba(0.3, 0.6, 1.0, 0.5),
-                        width: 1.0,
+                        ..Default::default()
                     },
                     ..Default::default()
                 }),
@@ -658,7 +863,7 @@ fn view_unified_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_, 
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_theme| container::Style {
-            background: Some(Color::from_rgba(0.12, 0.13, 0.16, state.opacity).into()),
+            background: Some(unified_workspace_bg.into()),
             border: iced::Border {
                 radius: iced::border::Radius {
                     top_left: 0.0,
@@ -727,16 +932,29 @@ fn view_sidebar_items(state: &DemoState) -> Element<'_, Message> {
                 }
             } else {
                 let hover = matches!(status, button::Status::Hovered);
+                let is_dark = state.is_dark();
                 button::Style {
                     background: if hover {
-                        Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into())
+                        Some(if is_dark {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()
+                        } else {
+                            Color::from_rgba(0.0, 0.0, 0.0, 0.06).into()
+                        })
                     } else {
                         None
                     },
                     text_color: if hover {
-                        Color::from_rgb(0.9, 0.9, 0.9)
+                        if is_dark {
+                            Color::from_rgb(0.95, 0.95, 0.98)
+                        } else {
+                            Color::from_rgb(0.10, 0.10, 0.15)
+                        }
                     } else {
-                        Color::from_rgb(0.65, 0.65, 0.68)
+                        if is_dark {
+                            Color::from_rgb(0.65, 0.65, 0.70)
+                        } else {
+                            Color::from_rgb(0.35, 0.36, 0.40)
+                        }
                     },
                     border: iced::Border {
                         radius: 8.0.into(),
@@ -750,9 +968,14 @@ fn view_sidebar_items(state: &DemoState) -> Element<'_, Message> {
         nav_col = nav_col.push(item_btn);
     }
 
+    let is_dark = state.is_dark();
     let status_pill = container(
         column![
-            text("bmol-window-shell").size(11).color(Color::from_rgb(0.5, 0.5, 0.55)),
+            text("bmol-window-shell").size(11).color(if is_dark {
+                Color::from_rgb(0.5, 0.5, 0.55)
+            } else {
+                Color::from_rgb(0.4, 0.4, 0.45)
+            }),
             row![
                 text(if state.native_attached { "● Native Attached" } else { "○ Initializing" })
                     .size(11)
@@ -1129,25 +1352,45 @@ fn card<'a>(
     subtitle: &'static str,
     content: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    let header = column![
-        text(title).size(15),
-        text(subtitle).size(12).color(Color::from_rgb(0.6, 0.6, 0.65)),
+    let body = column![
+        column![
+            text(title).size(15),
+            text(subtitle).size(12).color(Color::from_rgb(0.55, 0.55, 0.60)),
+        ]
+        .spacing(4),
+        card_divider(),
+        content.into()
     ]
-    .spacing(4);
-
-    let body = column![header, card_divider(), content.into()].spacing(12);
+    .spacing(12);
 
     container(body)
         .padding(16)
         .width(Length::Fill)
-        .style(|_theme| container::Style {
-            background: Some(Color::from_rgba(0.18, 0.20, 0.24, 0.6).into()),
-            border: iced::Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                width: 1.0,
-                radius: 12.0.into(),
-            },
-            ..Default::default()
+        .style(|theme| {
+            let is_light = matches!(
+                theme,
+                Theme::Light
+                    | Theme::CatppuccinLatte
+                    | Theme::SolarizedLight
+                    | Theme::TokyoNightLight
+            );
+            container::Style {
+                background: Some(if is_light {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.85).into()
+                } else {
+                    Color::from_rgba(0.18, 0.20, 0.24, 0.6).into()
+                }),
+                border: iced::Border {
+                    color: if is_light {
+                        Color::from_rgba(0.0, 0.0, 0.0, 0.06)
+                    } else {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+                    },
+                    width: 1.0,
+                    radius: 12.0.into(),
+                },
+                ..Default::default()
+            }
         })
         .into()
 }
@@ -1156,21 +1399,42 @@ fn card_divider<'a>() -> Element<'a, Message> {
     container(column![])
         .height(Length::Fixed(1.0))
         .width(Length::Fill)
-        .style(|_theme| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.06).into()),
-            ..Default::default()
+        .style(|theme| {
+            let is_light = matches!(
+                theme,
+                Theme::Light
+                    | Theme::CatppuccinLatte
+                    | Theme::SolarizedLight
+                    | Theme::TokyoNightLight
+            );
+            container::Style {
+                background: Some(if is_light {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.06).into()
+                } else {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.06).into()
+                }),
+                ..Default::default()
+            }
         })
         .into()
 }
 
-fn theme(_state: &DemoState) -> Theme {
-    Theme::Dark
+fn theme(state: &DemoState) -> Theme {
+    if state.is_dark() {
+        Theme::Dark
+    } else {
+        Theme::Light
+    }
 }
 
-fn style(_state: &DemoState, _theme: &Theme) -> iced::theme::Style {
+fn style(state: &DemoState, _theme: &Theme) -> iced::theme::Style {
     iced::theme::Style {
         background_color: Color::TRANSPARENT,
-        text_color: Color::from_rgb(0.92, 0.92, 0.92),
+        text_color: if state.is_dark() {
+            Color::from_rgb(0.92, 0.92, 0.92)
+        } else {
+            Color::from_rgb(0.12, 0.13, 0.15)
+        },
     }
 }
 

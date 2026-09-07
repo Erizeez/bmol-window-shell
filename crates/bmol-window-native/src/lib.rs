@@ -79,6 +79,30 @@ pub fn configure_window_shadow(target: DesktopBlurTarget, has_shadow: bool) {
     let _ = (target, has_shadow);
 }
 
+/// Target appearance mode for the native platform window (Light, Dark, or System).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+pub enum WindowAppearance {
+    /// Follows the operating system's light/dark appearance dynamically.
+    #[default]
+    System,
+    /// Forces the window and system-level materials to light mode (Aqua).
+    Light,
+    /// Forces the window and system-level materials to dark mode (DarkAqua).
+    Dark,
+}
+
+/// Configures the native window's effective appearance (Light, Dark, or System dynamic).
+///
+/// On macOS, this sets `NSWindow.appearance` directly using `NSAppearanceNameAqua` or
+/// `NSAppearanceNameDarkAqua`, or resets to `nil` to follow the system dynamic appearance.
+pub fn configure_window_appearance(target: DesktopBlurTarget, appearance: WindowAppearance) {
+    #[cfg(target_os = "macos")]
+    macos::configure_window_appearance(target, appearance);
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = (target, appearance);
+}
+
 /// Captures the pixels below a transparent application window for shader use.
 ///
 /// The native window compositor can blur the desktop behind transparent
@@ -401,6 +425,32 @@ mod macos {
         if let Some(window) = view.window() {
             window.setHasShadow(has_shadow);
             window.invalidateShadow();
+        }
+    }
+
+    pub fn configure_window_appearance(target: DesktopBlurTarget, appearance: super::WindowAppearance) {
+        let Some(ns_view) = std::ptr::NonNull::new(target.0 as *mut c_void) else {
+            return;
+        };
+        let view: &NSView = unsafe { ns_view.cast().as_ref() };
+        if let Some(window) = view.window() {
+            unsafe {
+                let name = match appearance {
+                    super::WindowAppearance::System => None,
+                    super::WindowAppearance::Light => Some(NSString::from_str("NSAppearanceNameAqua")),
+                    super::WindowAppearance::Dark => Some(NSString::from_str("NSAppearanceNameDarkAqua")),
+                };
+                if let Some(name) = name {
+                    if let Some(app_cls) = AnyClass::get(c"NSAppearance") {
+                        let appearance_obj: *mut AnyObject = msg_send![app_cls, appearanceNamed: &*name];
+                        if !appearance_obj.is_null() {
+                            let () = msg_send![&*window, setAppearance: appearance_obj];
+                        }
+                    }
+                } else {
+                    let () = msg_send![&*window, setAppearance: std::ptr::null::<AnyObject>()];
+                }
+            }
         }
     }
 
