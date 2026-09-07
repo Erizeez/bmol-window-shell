@@ -14,10 +14,16 @@ use bmol_window_shell::{
 };
 use iced::font::{self, Family, Font};
 use iced::widget::{
-    button, column, container, mouse_area, row, scrollable, slider, space, svg, text, toggler,
+    button, column, container, mouse_area, row, scrollable, slider, space, text, toggler,
 };
 use iced::window;
 use iced::{Alignment, Color, Element, Length, Padding, Size, Subscription, Task, Theme};
+use liquid_glass::UiColorScheme;
+
+#[path = "playground/window_controls.rs"]
+pub mod window_controls;
+
+use window_controls::{ControlAction, TrafficLightsState};
 
 /// Standard Apple Titlebar Font (SF Pro Text for Latin, PingFang SC for Chinese).
 ///
@@ -94,11 +100,13 @@ enum Message {
     CornerRadiusChanged(f64),
     OpacityChanged(f32),
     ResetDefaults,
-    CloseWindow,
-    MinimizeWindow,
     ToggleMaximize,
     DragWindow,
+    WindowControl(ControlAction),
     TrafficLightsHover(bool),
+    TrafficLightsPressStart(usize),
+    TrafficLightsPressEnd(usize),
+    AnimationFrame(std::time::Instant),
     WindowFocused(bool),
 }
 
@@ -110,7 +118,7 @@ struct DemoState {
     layout_selection: LayoutSelection,
     theme_preference: ThemePreference,
     system_theme: iced::theme::Mode,
-    traffic_lights_hovered: bool,
+    traffic_lights: TrafficLightsState,
     window_focused: bool,
     separate_titlebar_height: f32,
     unified_header_height: f32,
@@ -144,7 +152,7 @@ impl Default for DemoState {
             layout_selection: LayoutSelection::Separate,
             theme_preference: ThemePreference::System,
             system_theme: initial_theme,
-            traffic_lights_hovered: false,
+            traffic_lights: TrafficLightsState::new(),
             window_focused: true,
             separate_titlebar_height: 32.0,
             unified_header_height: 54.0,
@@ -450,20 +458,6 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
                 Task::none()
             }
         }
-        Message::CloseWindow => {
-            if let Some(id) = state.window_id {
-                window::close(id)
-            } else {
-                Task::none()
-            }
-        }
-        Message::MinimizeWindow => {
-            if let Some(id) = state.window_id {
-                window::minimize(id, true)
-            } else {
-                Task::none()
-            }
-        }
         Message::ToggleMaximize => {
             if let Some(id) = state.window_id {
                 window::toggle_maximize(id)
@@ -478,8 +472,31 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
                 Task::none()
             }
         }
+        Message::WindowControl(action) => {
+            if let Some(id) = state.window_id {
+                match action {
+                    ControlAction::Close => window::close(id),
+                    ControlAction::Minimize => window::minimize(id, true),
+                    ControlAction::Expand => window::toggle_maximize(id),
+                }
+            } else {
+                Task::none()
+            }
+        }
         Message::TrafficLightsHover(hovered) => {
-            state.traffic_lights_hovered = hovered;
+            state.traffic_lights.on_group_hover(hovered);
+            Task::none()
+        }
+        Message::TrafficLightsPressStart(index) => {
+            state.traffic_lights.on_press_start(index);
+            Task::none()
+        }
+        Message::TrafficLightsPressEnd(index) => {
+            state.traffic_lights.on_press_end(index);
+            Task::none()
+        }
+        Message::AnimationFrame(now) => {
+            state.traffic_lights.step(now);
             Task::none()
         }
         Message::WindowFocused(focused) => {
@@ -492,8 +509,16 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
     task
 }
 
-fn subscription(_state: &DemoState) -> Subscription<Message> {
+fn subscription(state: &DemoState) -> Subscription<Message> {
+    let anim_sub = if state.traffic_lights.is_animating() {
+        iced::time::every(std::time::Duration::from_millis(16))
+            .map(|_| Message::AnimationFrame(std::time::Instant::now()))
+    } else {
+        Subscription::none()
+    };
+
     Subscription::batch([
+        anim_sub,
         window::open_events().map(Message::WindowOpened),
         window::resize_events().map(|(_id, size)| Message::WindowResized(size)),
         window::events().filter_map(|(_id, event)| match event {
@@ -533,122 +558,23 @@ fn view(state: &DemoState) -> Element<'_, Message> {
 // Hand-crafted Apple-style Liquid Glass Traffic Lights (Close / Minimize / Zoom)
 // =========================================================================
 
-const CLOSE_GLYPH_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2 2l6 6M8 2l-6 6"/></svg>"#;
-const MINIMIZE_GLYPH_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.0" d="M1.5 5h7"/></svg>"#;
-const ZOOM_GLYPH_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="currentColor" d="M1 4.5V1h3.5L1 4.5zM9 5.5V9H5.5L9 5.5z"/></svg>"#;
-
-fn view_traffic_lights(state: &DemoState) -> Element<'_, Message> {
-    let show_glyphs = state.traffic_lights_hovered;
-    let is_active = state.window_focused || state.traffic_lights_hovered;
-    let is_dark = state.is_dark();
-
-    let make_button = |norm_fill: Color,
-                       norm_stroke: Color,
-                       hover_fill: Color,
-                       press_fill: Color,
-                       glyph_svg: &'static str,
-                       glyph_color: Color,
-                       msg: Message| {
-        let (fill, stroke) = if is_active {
-            (norm_fill, norm_stroke)
-        } else if is_dark {
-            (
-                Color::from_rgba(0.32, 0.32, 0.35, 0.50),
-                Color::from_rgba(0.24, 0.24, 0.26, 0.40),
-            )
-        } else {
-            (
-                Color::from_rgba(0.85, 0.85, 0.87, 0.95),
-                Color::from_rgba(0.72, 0.72, 0.75, 0.70),
-            )
-        };
-
-        let content: Element<'_, Message> = if show_glyphs {
-            container(
-                svg(svg::Handle::from_memory(glyph_svg.as_bytes()))
-                    .width(Length::Fixed(7.0))
-                    .height(Length::Fixed(7.0))
-                    .style(move |_theme, _status| svg::Style {
-                        color: Some(glyph_color),
-                    }),
-            )
-            .width(Length::Fixed(12.0))
-            .height(Length::Fixed(12.0))
-            .center_x(Length::Fixed(12.0))
-            .center_y(Length::Fixed(12.0))
-            .into()
-        } else {
-            space::horizontal()
-                .width(Length::Fixed(12.0))
-                .height(Length::Fixed(12.0))
-                .into()
-        };
-
-        button(content)
-            .padding(0)
-            .width(Length::Fixed(12.0))
-            .height(Length::Fixed(12.0))
-            .on_press(msg)
-            .style(move |_theme, status| {
-                let bg = if !is_active {
-                    fill
-                } else {
-                    match status {
-                        button::Status::Pressed => press_fill,
-                        button::Status::Hovered => hover_fill,
-                        _ => fill,
-                    }
-                };
-                button::Style {
-                    background: Some(bg.into()),
-                    border: iced::Border {
-                        color: stroke,
-                        width: 0.5,
-                        radius: 6.0.into(),
-                    },
-                    ..Default::default()
-                }
-            })
+fn view_traffic_lights<'a>(state: &'a DemoState) -> Element<'a, Message> {
+    let scheme = if state.is_dark() {
+        UiColorScheme::Dark
+    } else {
+        UiColorScheme::Light
     };
+    let inactive = !state.window_focused;
 
-    let close_btn = make_button(
-        Color::from_rgb8(0xFF, 0x5F, 0x56),
-        Color::from_rgb8(0xE0, 0x44, 0x3E),
-        Color::from_rgb8(0xFF, 0x6E, 0x67),
-        Color::from_rgb8(0xD2, 0x3C, 0x34),
-        CLOSE_GLYPH_SVG,
-        Color::from_rgba(0.32, 0.08, 0.06, 0.95),
-        Message::CloseWindow,
-    );
-
-    let min_btn = make_button(
-        Color::from_rgb8(0xFF, 0xBD, 0x2E),
-        Color::from_rgb8(0xDE, 0xA1, 0x23),
-        Color::from_rgb8(0xFF, 0xC8, 0x47),
-        Color::from_rgb8(0xD7, 0x96, 0x1E),
-        MINIMIZE_GLYPH_SVG,
-        Color::from_rgba(0.38, 0.22, 0.02, 0.95),
-        Message::MinimizeWindow,
-    );
-
-    let zoom_btn = make_button(
-        Color::from_rgb8(0x27, 0xC9, 0x3F),
-        Color::from_rgb8(0x1A, 0xAB, 0x29),
-        Color::from_rgb8(0x32, 0xD8, 0x4D),
-        Color::from_rgb8(0x19, 0xA0, 0x23),
-        ZOOM_GLYPH_SVG,
-        Color::from_rgba(0.06, 0.28, 0.05, 0.95),
-        Message::ToggleMaximize,
-    );
-
-    mouse_area(
-        row![close_btn, min_btn, zoom_btn]
-            .spacing(8)
-            .align_y(Alignment::Center),
+    window_controls::view_traffic_lights(
+        &state.traffic_lights,
+        scheme,
+        inactive,
+        Message::WindowControl,
+        Message::TrafficLightsPressStart,
+        Message::TrafficLightsPressEnd,
+        Message::TrafficLightsHover,
     )
-    .on_enter(Message::TrafficLightsHover(true))
-    .on_exit(Message::TrafficLightsHover(false))
-    .into()
 }
 
 fn view_theme_toggle(state: &DemoState) -> Element<'_, Message> {
@@ -888,12 +814,12 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
     .align_y(Alignment::Center);
 
     let titlebar_content = row![
-        // 1. Left leading edge margin (16px)
-        column![].width(Length::Fixed(16.0)),
+        // 1. Left leading edge margin (10px + 6px slop = 16px to circle edge)
+        column![].width(Length::Fixed(10.0)),
         // 2. Custom Apple traffic lights
         view_traffic_lights(state),
-        // 3. Exactly 16px clearance between traffic lights and title
-        column![].width(Length::Fixed(16.0)),
+        // 3. Exactly 16px clearance between traffic lights and title (10px + 6px slop = 16px)
+        column![].width(Length::Fixed(10.0)),
         // 4. Left-aligned title text (Apple standard 13pt SF Pro / PingFang SC Regular 400)
         text("BMOL Window Shell")
             .size(13)
@@ -1006,9 +932,9 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element
 
     // 1. Top Header Area (Transparent canvas, owned by downstream application)
     let header_content = row![
-        column![].width(Length::Fixed(16.0)),
+        column![].width(Length::Fixed(10.0)),
         view_traffic_lights(state),
-        column![].width(Length::Fixed(20.0)),
+        column![].width(Length::Fixed(14.0)),
         text(match state.active_tab {
             0 => "Window Architecture",
             1 => "Layout & Collision Hitboxes",
@@ -1105,7 +1031,7 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> Element<
     let is_dark = state.is_dark();
 
     let sidebar_header_content = row![
-        column![].width(Length::Fixed(16.0)),
+        column![].width(Length::Fixed(10.0)),
         view_traffic_lights(state),
         space::horizontal().width(Length::Fill),
     ]

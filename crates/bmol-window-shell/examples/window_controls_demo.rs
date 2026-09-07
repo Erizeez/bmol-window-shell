@@ -18,71 +18,37 @@ use iced::{
     widget::{button, column, container, mouse_area, row, scrollable, space, stack, text},
 };
 use iced_backend::{
-    DemoSurface, INTERACTION_ENTER_ANIMATION_TIME_CONSTANT,
-    INTERACTION_EXIT_ANIMATION_TIME_CONSTANT, Renderer, WINDOW_CONTROL_DISABLED_IDS,
-    WINDOW_CONTROL_DISABLED_X, WINDOW_CONTROL_DISABLED_Y, WINDOW_CONTROL_GAP,
+    DemoSurface, Renderer, WINDOW_CONTROL_DISABLED_IDS,
+    WINDOW_CONTROL_DISABLED_X, WINDOW_CONTROL_DISABLED_Y,
     WINDOW_CONTROL_INACTIVE_IDS, WINDOW_CONTROL_INACTIVE_X, WINDOW_CONTROL_INACTIVE_Y,
-    WINDOW_CONTROL_LARGE_GAP, WINDOW_CONTROL_LARGE_IDS, WINDOW_CONTROL_LARGE_SIZE,
+    WINDOW_CONTROL_LARGE_IDS,
     WINDOW_CONTROL_LARGE_X, WINDOW_CONTROL_LARGE_Y, WINDOW_CONTROL_NATIVE_IDS,
-    WINDOW_CONTROL_NATIVE_SIZE, WINDOW_CONTROL_NATIVE_X, WINDOW_CONTROL_NATIVE_Y,
+    WINDOW_CONTROL_NATIVE_X, WINDOW_CONTROL_NATIVE_Y,
     WINDOW_CONTROL_REFERENCE_IDS, WINDOW_CONTROL_REFERENCE_X, WINDOW_CONTROL_REFERENCE_Y,
     WindowControlTuning,
 };
 use liquid_glass::{
     GlassButton, GlassId, GlassMaterial, GlassRole, GlassShape, IcedWindowController,
-    IcedWindowPolicy, Rect, UiColorScheme, UiCornerStyle, UiIcon, UiTheme, WindowCommand,
+    IcedWindowPolicy, Rect, UiColorScheme, UiCornerStyle, UiTheme, WindowCommand,
     WindowDragArea, WindowExpandBehavior,
     ui::{GlassChrome, components, font},
 };
 use spring_rs::{Spring, SpringMotion};
 
-// The control deliberately has a visible, inspectable click pulse. The
-// resting target remains above 1.0, while the press target gives the spring
-// enough travel to show both its growth and release phases at 14 pt.
-const PRESS_SCALE_OVERSHOOT: f32 = 1.18;
-const PRESS_SCALE_SETTLED: f32 = 1.06;
-const PRESS_SCALE_SPRING_DURATION: f32 = 0.24;
-const PRESS_SCALE_SPRING_EXTRA_BOUNCE: f32 = 0.40;
+#[path = "playground/window_controls.rs"]
+pub mod window_controls;
+
+pub use window_controls::{
+    ControlAction, ControlGroup, INTERACTION_ENTER_ANIMATION_TIME_CONSTANT,
+    INTERACTION_EXIT_ANIMATION_TIME_CONSTANT, PRESS_SCALE_OVERSHOOT, PRESS_SCALE_SETTLED,
+    PRESS_SCALE_SPRING_DURATION, PRESS_SCALE_SPRING_EXTRA_BOUNCE, TrafficLightsState,
+    WINDOW_CONTROL_GAP, WINDOW_CONTROL_LARGE_GAP, WINDOW_CONTROL_LARGE_SIZE,
+    WINDOW_CONTROL_NATIVE_SIZE, blend_color, centered, control_hover_slop,
+    window_control_glyph_color, window_control_glyph_size, window_control_icon,
+    window_control_status_dot,
+};
 
 type AppElement<'a> = Element<'a, Message, Theme, Renderer>;
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum ControlAction {
-    Close,
-    Minimize,
-    Expand,
-}
-
-impl ControlAction {
-    fn name(self) -> &'static str {
-        match self {
-            Self::Close => "Close",
-            Self::Minimize => "Minimize",
-            Self::Expand => "Expand",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum ControlGroup {
-    Native,
-    Reference,
-    Active,
-    Inactive,
-    Disabled,
-}
-
-impl ControlGroup {
-    const fn index(self) -> usize {
-        match self {
-            Self::Native => 0,
-            Self::Reference => 1,
-            Self::Active => 2,
-            Self::Inactive => 3,
-            Self::Disabled => 4,
-        }
-    }
-}
 
 const ALL_WINDOW_CONTROL_IDS: [GlassId; 15] = [
     WINDOW_CONTROL_NATIVE_IDS[0],
@@ -815,10 +781,6 @@ fn positioned_control_group(
     positioned(content, x - slop, y - slop)
 }
 
-fn control_hover_slop(size: f32) -> f32 {
-    (size * 0.20).clamp(6.0, 12.0)
-}
-
 fn window_control_slot_index(id: GlassId) -> Option<usize> {
     ALL_WINDOW_CONTROL_IDS.iter().position(|candidate| *candidate == id)
 }
@@ -973,85 +935,6 @@ fn window_control(
     // single child to a button+glyph stack during hover would recreate the
     // button's capture node exactly while a press is in flight.
     components::glass_overlay(stack![button, centered(glyph, size)])
-}
-
-fn window_control_status_dot(color: Color, size: f32) -> AppElement<'static> {
-    let dot_size = (size * 0.24).max(3.0);
-    container(space())
-        .width(Length::Fixed(dot_size))
-        .height(Length::Fixed(dot_size))
-        .style(move |_theme| container::Style {
-            background: Some(Background::Color(color)),
-            border: iced::Border::default().rounded(dot_size * 0.5),
-            ..container::Style::default()
-        })
-        .into()
-}
-
-fn window_control_glyph_size(action: ControlAction, size: f32) -> f32 {
-    // Measured from a 2x AppKit screenshot: the close glyph spans 14 px
-    // (7 pt) and the minimize glyph spans 16 px (8 pt) inside a 14 pt
-    // (28 px) traffic-light circle. The SVG viewBoxes are normalized to
-    // those footprints, so these ratios remain valid on every scale.
-    let factor = if size <= WINDOW_CONTROL_NATIVE_SIZE {
-        match action {
-            ControlAction::Close => 7.0 / 14.0,
-            ControlAction::Minimize => 8.0 / 14.0,
-            ControlAction::Expand => 0.42,
-        }
-    } else {
-        0.42
-    };
-    (size * factor).max(4.0)
-}
-
-fn window_control_glyph_color(
-    scheme: UiColorScheme,
-    action: ControlAction,
-    inactive: bool,
-    focus_amount: f32,
-) -> Color {
-    let focus_amount = focus_amount.clamp(0.0, 1.0);
-    let active = match action {
-        // Keep each glyph in the button's hue family while darkening it
-        // enough to remain legible over the saturated glass body.
-        ControlAction::Close => Color::from_rgba(0.38, 0.10, 0.08, 0.92),
-        ControlAction::Minimize => Color::from_rgba(0.42, 0.28, 0.03, 0.92),
-        ControlAction::Expand => Color::from_rgba(0.09, 0.32, 0.07, 0.92),
-    };
-    let inactive_color = match scheme {
-        UiColorScheme::Light => Color::from_rgba(0.52, 0.53, 0.56, 0.78),
-        UiColorScheme::Dark => Color::from_rgba(0.82, 0.83, 0.86, 0.76),
-    };
-    let color = if inactive { blend_color(inactive_color, active, focus_amount) } else { active };
-    Color::from_rgba(color.r, color.g, color.b, color.a * focus_amount)
-}
-
-fn blend_color(from: Color, to: Color, amount: f32) -> Color {
-    let amount = amount.clamp(0.0, 1.0);
-    Color::from_rgba(
-        from.r + (to.r - from.r) * amount,
-        from.g + (to.g - from.g) * amount,
-        from.b + (to.b - from.b) * amount,
-        from.a + (to.a - from.a) * amount,
-    )
-}
-
-fn window_control_icon(action: ControlAction, expand_behavior: WindowExpandBehavior) -> UiIcon {
-    match action {
-        ControlAction::Close => UiIcon::WindowClose,
-        ControlAction::Minimize => UiIcon::WindowMinimize,
-        ControlAction::Expand => expand_behavior.icon(),
-    }
-}
-
-fn centered(content: AppElement<'static>, size: f32) -> AppElement<'static> {
-    container(content)
-        .width(Length::Fixed(size))
-        .height(Length::Fixed(size))
-        .center_x(Length::Fixed(size))
-        .center_y(Length::Fixed(size))
-        .into()
 }
 
 fn main() -> iced::Result {
