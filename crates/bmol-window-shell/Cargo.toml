@@ -1,0 +1,17 @@
+[package]
+name = "bmol-window-shell"
+description = "Modern seamless frameless window shell, macOS blur & EDR integration for GUI applications"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+bmol-window-native = { path = "../bmol-window-native", version = "0.1.0" }
+bmol-window-platform = { path = "../bmol-window-platform", version = "0.1.0" }
+raw-window-handle = "0.6.2"
+
+[lints]
+workspace = true
