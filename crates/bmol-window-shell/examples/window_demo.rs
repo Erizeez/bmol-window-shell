@@ -58,15 +58,15 @@ struct DemoState {
 
 impl Default for DemoState {
     fn default() -> Self {
-        let default_config = WindowChromeConfig::unified(54.0, Some(220.0));
+        let default_config = WindowChromeConfig::separate(32.0);
         let metrics = WindowChromeMetrics::compute(980.0, 640.0, &default_config);
 
         Self {
             window_id: None,
             window_size: Size::new(980.0, 640.0),
             active_tab: 0,
-            layout_selection: LayoutSelection::Unified,
-            separate_titlebar_height: 44.0,
+            layout_selection: LayoutSelection::Separate,
+            separate_titlebar_height: 32.0,
             unified_header_height: 54.0,
             sidebar_width: 220.0,
             show_hitboxes: false,
@@ -219,8 +219,8 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ResetDefaults => {
-            state.layout_selection = LayoutSelection::Unified;
-            state.separate_titlebar_height = 44.0;
+            state.layout_selection = LayoutSelection::Separate;
+            state.separate_titlebar_height = 32.0;
             state.unified_header_height = 54.0;
             state.show_hitboxes = false;
             state.blur_enabled = true;
@@ -272,50 +272,52 @@ fn view(state: &DemoState) -> Element<'_, Message> {
 
 fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, Message> {
     let titlebar_height = state.metrics.header_rect.height;
-    let tl_clearance = state.metrics.traffic_lights_exclusion_zone.width;
+    let tl_w = state.metrics.traffic_lights_hitbox.max_x();
 
     let mode_switch = row![
         button(text("Separate (Active)").size(11))
-            .padding([4, 8])
+            .padding([3, 8])
             .style(|_theme, _status| button::Style {
-                background: Some(Color::from_rgba(0.2, 0.5, 1.0, 0.4).into()),
-                text_color: Color::from_rgb(0.4, 0.8, 1.0),
+                background: Some(Color::from_rgba(0.0, 0.48, 1.0, 0.12).into()),
+                text_color: Color::from_rgb(0.0, 0.42, 0.90),
                 border: iced::Border {
                     radius: 4.0.into(),
-                    color: Color::from_rgba(0.3, 0.6, 1.0, 0.5),
+                    color: Color::from_rgba(0.0, 0.48, 1.0, 0.30),
                     width: 1.0,
                 },
                 ..Default::default()
             }),
         button(text("Switch to Unified").size(11))
-            .padding([4, 8])
+            .padding([3, 8])
             .on_press(Message::SelectLayout(LayoutSelection::Unified))
             .style(|_theme, status| button::Style {
                 background: if matches!(status, button::Status::Hovered) {
-                    Some(Color::from_rgba(1.0, 1.0, 1.0, 0.1).into())
+                    Some(Color::from_rgba(0.0, 0.0, 0.0, 0.05).into())
                 } else {
                     None
                 },
-                text_color: Color::from_rgb(0.7, 0.7, 0.75),
+                text_color: Color::from_rgb(0.35, 0.36, 0.40),
                 border: iced::Border {
                     radius: 4.0.into(),
-                    ..Default::default()
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.10),
+                    width: 1.0,
                 },
                 ..Default::default()
             }),
         button(text("Reset").size(11))
-            .padding([4, 8])
+            .padding([3, 8])
             .on_press(Message::ResetDefaults)
             .style(|_theme, status| button::Style {
                 background: if matches!(status, button::Status::Hovered) {
-                    Some(Color::from_rgba(1.0, 1.0, 1.0, 0.1).into())
+                    Some(Color::from_rgba(0.0, 0.0, 0.0, 0.05).into())
                 } else {
                     None
                 },
-                text_color: Color::from_rgb(0.7, 0.7, 0.75),
+                text_color: Color::from_rgb(0.35, 0.36, 0.40),
                 border: iced::Border {
                     radius: 4.0.into(),
-                    ..Default::default()
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.10),
+                    width: 1.0,
                 },
                 ..Default::default()
             }),
@@ -324,12 +326,14 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
     .align_y(Alignment::Center);
 
     let titlebar_content = row![
-        // Reserved space so title and controls do not collide with native traffic lights
-        column![].width(Length::Fixed(tl_clearance)),
-        // Centered title text
-        text("BMOL Window Shell - Standalone Titlebar")
+        // 1. Reserved space for native traffic lights
+        column![].width(Length::Fixed(tl_w)),
+        // 2. 16px clearance between traffic lights and title
+        column![].width(Length::Fixed(16.0)),
+        // 3. Left-aligned title text (crisp dark text on white titlebar)
+        text("BMOL Window Shell")
             .size(13)
-            .color(Color::from_rgb(0.85, 0.85, 0.88)),
+            .color(Color::from_rgb(0.12, 0.13, 0.15)),
         space::horizontal(),
         mode_switch,
     ]
@@ -340,7 +344,7 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
 
     let titlebar_container = container(titlebar_content)
         .style(|_theme| container::Style {
-            background: Some(Color::from_rgba(0.14, 0.15, 0.18, 0.8).into()),
+            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.98).into()),
             ..Default::default()
         });
 
@@ -349,7 +353,7 @@ fn view_separate_window(state: &DemoState, plan: ChromeDrawPlan) -> Element<'_, 
             .height(Length::Fixed(1.0))
             .width(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.12).into()),
+                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.12).into()),
                 ..Default::default()
             })
     } else {
@@ -698,7 +702,7 @@ fn view_tab_architecture(state: &DemoState) -> Element<'_, Message> {
                     text("Separate Titlebar Height").size(13).width(Length::Fill),
                     text(format!("{:.0} pt", state.separate_titlebar_height)).size(13),
                 ],
-                slider(36.0..=72.0, state.separate_titlebar_height, Message::SeparateHeightChanged)
+                slider(28.0..=64.0, state.separate_titlebar_height, Message::SeparateHeightChanged)
                     .step(1.0),
             ]
             .spacing(6),

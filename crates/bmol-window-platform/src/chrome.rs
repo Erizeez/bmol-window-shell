@@ -38,10 +38,10 @@ pub enum ChromeLayoutMode {
 }
 
 impl ChromeLayoutMode {
-    /// Standalone titlebar with standard height (40.0 pt).
+    /// Standalone titlebar with standard height (32.0 pt).
     #[must_use]
     pub const fn separate_default() -> Self {
-        Self::Separate { titlebar_height: 40.0 }
+        Self::Separate { titlebar_height: 32.0 }
     }
 
     /// Unified chrome with standard header height (52.0 pt) and optional sidebar width (220.0 pt).
@@ -164,6 +164,9 @@ pub struct WindowChromeMetrics {
     /// Safe bounding box for drawing a centered window title.
     pub centered_title_rect: Option<Rect>,
 
+    /// Safe bounding box for drawing a left-aligned window title (16px to the right of traffic lights).
+    pub left_aligned_title_rect: Option<Rect>,
+
     /// Recommended safe insets for inner content.
     pub content_safe_insets: Insets,
 }
@@ -217,6 +220,15 @@ impl WindowChromeMetrics {
                     None
                 };
 
+                // Left-aligned title: starts strictly 16px to the right of traffic lights
+                let left_title_start_x = traffic_lights_hitbox.max_x() + 16.0;
+                let left_title_w = (width - left_title_start_x - config.toolbar_action_reserved_width).max(0.0);
+                let left_aligned_title_rect = if left_title_w > 10.0 {
+                    Some(Rect::new(left_title_start_x, 0.0, left_title_w, titlebar_h))
+                } else {
+                    None
+                };
+
                 Self {
                     window_size: (width, height),
                     mode: config.mode,
@@ -228,6 +240,7 @@ impl WindowChromeMetrics {
                     sidebar_rect: None,
                     sidebar_safe_content_rect: None,
                     centered_title_rect,
+                    left_aligned_title_rect,
                     content_safe_insets: Insets::new(0.0, 0.0, 0.0, 0.0),
                 }
             }
@@ -285,6 +298,7 @@ impl WindowChromeMetrics {
                     sidebar_rect,
                     sidebar_safe_content_rect,
                     centered_title_rect: None,
+                    left_aligned_title_rect: None,
                     content_safe_insets: Insets::new(header_h, 0.0, 0.0, 0.0),
                 }
             }
@@ -400,6 +414,10 @@ mod tests {
             metrics.hit_test(traffic_lights::LEADING_MARGIN + 4.0, 22.0),
             WindowHitZone::TrafficLights
         );
+
+        // Left-aligned title strictly 16px after traffic lights
+        let title_rect = metrics.left_aligned_title_rect.expect("left-aligned title exists");
+        assert_eq!(title_rect.x, metrics.traffic_lights_hitbox.max_x() + 16.0);
 
         // Content hit
         assert_eq!(metrics.hit_test(100.0, 100.0), WindowHitZone::Content);
