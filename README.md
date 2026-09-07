@@ -13,12 +13,12 @@ Compatible with any windowing or GUI framework via `raw-window-handle` (Iced, Wi
 - **Backdrop Capture**: Captures desktop pixels beneath the transparent window for optical refraction shaders.
 - **Asset Authoring Hooks**: Vector SF Symbols extraction and `.car` asset catalog rendition reading.
 
-## Running the Complete macOS Window Demo
+## Running the Complete Window Demo
 
-Run the complete macOS-style window replication demo:
+Run the complete frameless window replication demo:
 
 ```bash
-cargo run -p bmol-window-shell --example macos_window_demo
+cargo run -p bmol-window-shell --example window_demo
 ```
 
 ### What this demo replicates:
