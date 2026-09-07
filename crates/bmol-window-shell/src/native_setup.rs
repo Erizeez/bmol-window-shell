@@ -57,6 +57,15 @@ impl NativeWindowOptions {
     }
 
     #[must_use]
+    pub const fn with_dark_mode(self, is_dark: bool) -> Self {
+        self.with_appearance(if is_dark {
+            WindowAppearance::Dark
+        } else {
+            WindowAppearance::Light
+        })
+    }
+
+    #[must_use]
     pub const fn with_corner_radius(mut self, radius: f64) -> Self {
         self.corner_radius = radius;
         self

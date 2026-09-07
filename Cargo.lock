@@ -1697,6 +1697,7 @@ name = "liquid-glass-ui"
 version = "0.1.0"
 dependencies = [
  "bmol-designs",
+ "bmol-window-shell",
  "iced",
  "liquid-glass-scene",
  "spring-rs",
