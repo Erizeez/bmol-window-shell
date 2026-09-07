@@ -208,7 +208,7 @@ mod macos {
     };
     use objc2_app_kit::{
         NSApplication, NSApplicationDidBecomeActiveNotification, NSBitmapImageFileType,
-        NSBitmapImageRep, NSImage, NSView, NSWindowDidChangeOcclusionStateNotification,
+        NSBitmapImageRep, NSColor, NSImage, NSView, NSWindowDidChangeOcclusionStateNotification,
         NSWorkspace, NSWorkspaceActiveSpaceDidChangeNotification,
         NSWorkspaceSessionDidBecomeActiveNotification,
     };
@@ -344,6 +344,29 @@ mod macos {
         unsafe {
             let () = msg_send![&*layer, setCornerRadius: radius];
             let () = msg_send![&*layer, setMasksToBounds: masks];
+            let () = msg_send![&*layer, setOpaque: false];
+            let continuous = NSString::from_str("continuous");
+            let () = msg_send![&*layer, setCornerCurve: &*continuous];
+        }
+
+        // Eliminate the black border and corner artifacts by configuring the live NSWindow:
+        // 1. Transparent background color (clearColor)
+        // 2. Disabled opaque window frame
+        // 3. Disabled automatic ugly system titlebar separator line (NSTitlebarSeparatorStyleNone = 1)
+        // 4. Invalidate window shadow so it conforms smoothly to the continuous rounded mask
+        if let Some(window) = view.window() {
+            unsafe {
+                window.setOpaque(false);
+                let clear = NSColor::clearColor();
+                window.setBackgroundColor(Some(&clear));
+
+                // NSTitlebarSeparatorStyleNone = 1 (removes the ugly black/gray border line below titlebar on macOS 11+)
+                if msg_send![&*window, respondsToSelector: sel!(setTitlebarSeparatorStyle:)] {
+                    let () = msg_send![&*window, setTitlebarSeparatorStyle: 1_isize];
+                }
+
+                window.invalidateShadow();
+            }
         }
     }
 
@@ -352,7 +375,13 @@ mod macos {
         enabled: bool,
         color_space: Option<&NativeCGColorSpace>,
     ) -> bool {
+        unsafe {
+            let () = msg_send![&*layer, setOpaque: false];
+        }
         if let Some(metal_layer) = layer.downcast_ref::<CAMetalLayer>() {
+            unsafe {
+                let () = msg_send![&*metal_layer, setOpaque: false];
+            }
             metal_layer.setWantsExtendedDynamicRangeContent(enabled);
             metal_layer.setColorspace(color_space);
             return true;

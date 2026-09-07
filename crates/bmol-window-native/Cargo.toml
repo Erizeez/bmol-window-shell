@@ -18,6 +18,7 @@ objc2 = { version = "0.6", default-features = false }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSApplication",
     "NSBitmapImageRep",
+    "NSColor",
     "NSGraphics",
     "NSGraphicsContext",
     "NSImage",
