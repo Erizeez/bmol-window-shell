@@ -210,7 +210,7 @@ static ACTIVE_WINDOW_CONTROL_PROGRESS: Mutex<[f32; 5]> = Mutex::new([0.0; 5]);
 static ACTIVE_WINDOW_CONTROL_PRESS_PROGRESS: Mutex<[f32; 15]> = Mutex::new([0.0; 15]);
 static ACTIVE_WINDOW_CONTROL_SCALE: Mutex<[f32; 15]> = Mutex::new([1.0; 15]);
 static ACTIVE_WINDOW_CONTROL_TUNING: Mutex<WindowControlTuning> =
-    Mutex::new(WindowControlTuning::new());
+    Mutex::new(WindowControlTuning::for_scheme(UiColorScheme::Dark));
 static ACTIVE_WINDOW_CONTROL_ORIGIN: Mutex<(f32, f32)> =
     Mutex::new((WINDOW_CONTROL_NATIVE_X, WINDOW_CONTROL_NATIVE_Y));
 static ACTIVE_WINDOW_INACTIVE: AtomicBool = AtomicBool::new(false);
@@ -245,6 +245,7 @@ pub fn set_color_scheme(scheme: UiColorScheme) {
         },
         Ordering::Relaxed,
     );
+    set_window_control_tuning(WindowControlTuning::for_scheme(scheme));
 }
 
 fn active_color_scheme() -> UiColorScheme {
@@ -1655,6 +1656,13 @@ fn window_demo_scene(
     let scale_factor = scale_factor.max(1.0);
     let (origin_x, origin_y) = active_window_control_origin();
     let inactive = is_window_inactive();
+    let effective_tuning = if color_scheme == UiColorScheme::Dark
+        && tuning == WindowControlTuning::for_scheme(UiColorScheme::Light)
+    {
+        WindowControlTuning::for_scheme(UiColorScheme::Dark)
+    } else {
+        tuning
+    };
     push_traffic_light_group(
         &mut scene,
         &WINDOW_CONTROL_NATIVE_IDS,
@@ -1665,7 +1673,7 @@ fn window_demo_scene(
         inactive,
         false,
         color_scheme,
-        tuning,
+        effective_tuning,
         &interactions,
     );
     scale_scene(&mut scene, scale_factor);
@@ -1700,8 +1708,10 @@ fn push_traffic_light_group(
         } else {
             1.0
         };
-        let base_color = traffic_light_color(index, inactive, close_disabled);
-        let active_color = traffic_light_color(index, false, close_disabled);
+        let base_color =
+            traffic_light_color_for_scheme(index, inactive, close_disabled, color_scheme);
+        let active_color =
+            traffic_light_color_for_scheme(index, false, close_disabled, color_scheme);
         let display_color =
             if inactive { blend_color(base_color, active_color, focus) } else { base_color };
         let mut node = GlassNode::new(id, bounds)
@@ -1731,12 +1741,24 @@ fn blend_color(from: Color, to: Color, amount: f32) -> Color {
     )
 }
 
-fn traffic_light_color(index: usize, inactive: bool, _close_disabled: bool) -> Color {
+fn traffic_light_color(index: usize, inactive: bool, close_disabled: bool) -> Color {
+    traffic_light_color_for_scheme(index, inactive, close_disabled, active_color_scheme())
+}
+
+fn traffic_light_color_for_scheme(
+    index: usize,
+    inactive: bool,
+    _close_disabled: bool,
+    scheme: UiColorScheme,
+) -> Color {
     if inactive {
         // AppKit removes the chromatic traffic-light pigments when the window
-        // loses focus. The three controls share one cool light-gray substrate;
-        // only the focused window gets red, yellow, and green bodies.
-        return Color::rgba(0.78, 0.79, 0.82, 0.96);
+        // loses focus. Under dark mode, the graphite substrate is significantly
+        // darker (0.32, 0.32, 0.35) than the light mode cool gray (0.78, 0.79, 0.82).
+        return match scheme {
+            UiColorScheme::Dark => Color::rgba(0.32, 0.32, 0.35, 0.96),
+            UiColorScheme::Light => Color::rgba(0.78, 0.79, 0.82, 0.96),
+        };
     }
     let (red, green, blue) = match index {
         // These are deliberately saturated source colours. The glass body
@@ -1900,6 +1922,16 @@ mod tests {
         assert_eq!(red.b, yellow.b);
         assert_eq!(yellow.b, green.b);
         assert!(red.b > red.r);
+    }
+
+    #[test]
+    fn inactive_traffic_lights_distinguish_light_and_dark_schemes() {
+        let light = traffic_light_color_for_scheme(0, true, false, UiColorScheme::Light);
+        let dark = traffic_light_color_for_scheme(0, true, false, UiColorScheme::Dark);
+
+        assert_eq!(light, Color::rgba(0.78, 0.79, 0.82, 0.96));
+        assert_eq!(dark, Color::rgba(0.32, 0.32, 0.35, 0.96));
+        assert!(light.r > dark.r);
     }
 
     #[test]

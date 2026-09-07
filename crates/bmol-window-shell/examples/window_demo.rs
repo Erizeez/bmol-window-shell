@@ -23,7 +23,7 @@ use liquid_glass::UiColorScheme;
 #[path = "playground/iced_backend.rs"]
 mod iced_backend;
 
-use iced_backend::{DemoSurface, Renderer};
+use iced_backend::{DemoSurface, Renderer, WindowControlTuning};
 
 #[path = "playground/window_controls.rs"]
 pub mod window_controls;
@@ -237,6 +237,7 @@ impl DemoState {
             UiColorScheme::Light
         };
         iced_backend::set_color_scheme(scheme);
+        iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme));
         iced_backend::set_window_inactive(!self.window_focused);
 
         let origin_y = match self.layout_selection {
@@ -260,6 +261,7 @@ fn boot() -> (DemoState, Task<Message>) {
         UiColorScheme::Light
     };
     iced_backend::set_color_scheme(scheme);
+    iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme));
     iced_backend::set_accessibility(liquid_glass::GlassAccessibility::none());
     iced_backend::set_window_inactive(!state.window_focused);
     iced_backend::set_window_control_group_progress(0, 0.0);
