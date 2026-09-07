@@ -2,6 +2,15 @@
 
 #![deny(unsafe_code)]
 
+pub mod chrome;
+pub mod geometry;
+
+pub use chrome::{
+    ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics, WindowHitZone,
+    traffic_lights,
+};
+pub use geometry::{Insets, Point, Rect, Size as LogicalSize};
+
 use std::fmt;
 
 /// Display scale information passed into the renderer.
