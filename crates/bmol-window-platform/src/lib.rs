@@ -7,7 +7,7 @@ pub mod geometry;
 
 pub use chrome::{
     ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics, WindowHitZone,
-    traffic_lights, typography,
+    traffic_lights, typography, window_rim,
 };
 pub use geometry::{Insets, Point, Rect, Size as LogicalSize};
 

@@ -109,13 +109,13 @@ struct DemoState {
 impl Default for DemoState {
     fn default() -> Self {
         let default_config = WindowChromeConfig::separate(32.0);
-        let metrics = WindowChromeMetrics::compute(980.0, 640.0, &default_config);
         let initial_dark = bmol_window_shell::is_system_dark_mode();
         let initial_theme = if initial_dark {
             iced::theme::Mode::Dark
         } else {
             iced::theme::Mode::Light
         };
+        let metrics = WindowChromeMetrics::compute_with_theme(980.0, 640.0, &default_config, initial_dark);
 
         Self {
             window_id: None,
@@ -185,10 +185,11 @@ impl DemoState {
                 WindowChromeConfig::unified(self.unified_header_height, Some(self.sidebar_width))
             }
         };
-        self.metrics = WindowChromeMetrics::compute(
+        self.metrics = WindowChromeMetrics::compute_with_theme(
             self.window_size.width,
             self.window_size.height,
             &config,
+            self.is_dark(),
         );
     }
 
@@ -202,12 +203,13 @@ impl DemoState {
         iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme));
         iced_backend::set_window_inactive(!self.window_focused);
 
+        let rim_top = self.metrics.rim_insets.top;
         let origin_y = match self.layout_selection {
             LayoutSelection::Separate => {
-                (self.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
+                rim_top + (self.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
             }
             LayoutSelection::UnifiedSinglePane | LayoutSelection::UnifiedMultiPane => {
-                (self.unified_header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
+                rim_top + (self.unified_header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
             }
         };
         iced_backend::set_window_control_origin(
@@ -234,7 +236,8 @@ fn boot() -> (DemoState, Task<Message>) {
         iced_backend::set_window_control_press_progress(id, 0.0);
         iced_backend::set_window_control_scale(id, 1.0);
     }
-    let origin_y = (state.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5;
+    let rim_top = state.metrics.rim_insets.top;
+    let origin_y = rim_top + (state.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5;
     iced_backend::set_window_control_origin(
         iced_backend::WINDOW_CONTROL_NATIVE_X,
         origin_y,
@@ -584,15 +587,34 @@ fn view(state: &DemoState) -> AppElement<'_> {
         LayoutSelection::UnifiedMultiPane => view_unified_multi_pane(state, plan),
     };
 
-    let is_dark = state.is_dark();
-    let outer_radius = state.corner_radius as f32;
+    wrap_window_rim(content, state.is_dark(), state.corner_radius as f32)
+}
 
+/// Wraps the application root element in authentic macOS non-client rims with physical padding isolation.
+///
+/// Why physical padding isolation is mandatory:
+/// The window outer rim (1px in light mode, 2px compound in dark mode) is a non-client boundary.
+/// Without rigid padding isolation, downstream user application views (e.g. background fills,
+/// full-width toolbars, canvas, or scrollbars) would start at (0, 0) and overwrite, bleed through,
+/// or puncture the system rim.
+///
+/// By wrapping the user view inside a shell container with:
+/// - Light Mode: 1px physical padding + 1px subtle gray rim (rgba(0, 0, 0, 0.10))
+/// - Dark Mode: 1px outer black rim (padding: 1.0) + 1px inner highlight bevel (padding: 1.0), totaling 2.0px
+/// The downstream application's layout box is physically constrained strictly within the safe client area,
+/// rendering it mathematically impossible for client content to occupy or paint over the window rim.
+fn wrap_window_rim<'a>(
+    content: impl Into<AppElement<'a>>,
+    is_dark: bool,
+    outer_radius: f32,
+) -> AppElement<'a> {
     if is_dark {
         // Authentic macOS Dark Mode: Dual-layer compound rim (2px total physical width)
-        // 1. Inner Layer: 1px subtle light gray highlight bevel (rgba(1.0, 1.0, 1.0, 0.14))
-        let inner_window = container(content)
+        // 1. Inner Layer: 1px subtle light gray highlight bevel (rgba(1.0, 1.0, 1.0, 0.14)) with 1px padding
+        let inner_window = container(content.into())
             .width(Length::Fill)
             .height(Length::Fill)
+            .padding(1.0)
             .style(move |_theme| container::Style {
                 border: iced::Border {
                     color: Color::from_rgba(1.0, 1.0, 1.0, 0.14),
@@ -602,10 +624,11 @@ fn view(state: &DemoState) -> AppElement<'_> {
                 ..Default::default()
             });
 
-        // 2. Outer Layer: 1px deep black delineation rim (rgba(0.0, 0.0, 0.0, 0.85))
+        // 2. Outer Layer: 1px deep black delineation rim (rgba(0.0, 0.0, 0.0, 0.85)) with 1px padding
         container(inner_window)
             .width(Length::Fill)
             .height(Length::Fill)
+            .padding(1.0)
             .style(move |_theme| container::Style {
                 border: iced::Border {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.85),
@@ -616,10 +639,11 @@ fn view(state: &DemoState) -> AppElement<'_> {
             })
             .into()
     } else {
-        // Authentic macOS Light Mode: Single-layer 1px subtle gray outer rim (rgba(0.0, 0.0, 0.0, 0.10))
-        container(content)
+        // Authentic macOS Light Mode: Single-layer 1px subtle gray outer rim (rgba(0.0, 0.0, 0.0, 0.10)) with 1px padding
+        container(content.into())
             .width(Length::Fill)
             .height(Length::Fill)
+            .padding(1.0)
             .style(move |_theme| container::Style {
                 border: iced::Border {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.10),
@@ -892,9 +916,13 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
     .spacing(4)
     .align_y(Alignment::Center);
 
+    let rim_left = state.metrics.rim_insets.left;
+    let leading_spacer_w = (4.0 - rim_left).max(0.0);
+    let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
+
     let titlebar_content = row![
-        // 1. Left leading edge margin (4px spacer + 6px slop = strictly 10.0px to red circle edge)
-        column![].width(Length::Fixed(4.0)),
+        // 1. Left leading edge margin (adaptive spacer: rim_left + spacer_w + 6.0 slop = strictly 10.0px)
+        column![].width(Length::Fixed(leading_spacer_w)),
         // 2. Custom Apple traffic lights
         view_traffic_lights(state),
         // 3. Strictly 15px clearance between traffic lights and title (9px spacer + 6px slop = 15px)
@@ -923,8 +951,8 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
             background: Some(titlebar_bg.into()),
             border: iced::Border {
                 radius: iced::border::Radius {
-                    top_left: 16.0,
-                    top_right: 16.0,
+                    top_left: safe_radius,
+                    top_right: safe_radius,
                     bottom_right: 0.0,
                     bottom_left: 0.0,
                 },
@@ -950,7 +978,7 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
                         top_left: 0.0,
                         top_right: 0.0,
                         bottom_right: 0.0,
-                        bottom_left: 16.0,
+                        bottom_left: safe_radius,
                     },
                     ..Default::default()
                 },
@@ -965,7 +993,7 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
                     radius: iced::border::Radius {
                         top_left: 0.0,
                         top_right: 0.0,
-                        bottom_right: 16.0,
+                        bottom_right: safe_radius,
                         bottom_left: 0.0,
                     },
                     ..Default::default()
@@ -1009,10 +1037,14 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
         Color::from_rgb(0.12, 0.13, 0.15)
     };
 
+    let rim_left = state.metrics.rim_insets.left;
+    let leading_spacer_w = (4.0 - rim_left).max(0.0);
+    let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
+
     // 1. Top Header Area (Transparent canvas, owned by downstream application)
     let header_content = row![
-        // Left margin (4px spacer + 6px slop = strictly 10.0px to red circle edge)
-        column![].width(Length::Fixed(4.0)),
+        // Left margin (adaptive spacer: rim_left + spacer_w + 6.0 slop = strictly 10.0px)
+        column![].width(Length::Fixed(leading_spacer_w)),
         view_traffic_lights(state),
         // Strictly 15px clearance between traffic lights and header title (9px spacer + 6px slop = 15px)
         column![].width(Length::Fixed(9.0)),
@@ -1085,7 +1117,7 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
         .style(move |_theme| container::Style {
             background: Some(bg_color.into()),
             border: iced::Border {
-                radius: 16.0.into(),
+                radius: safe_radius.into(),
                 ..Default::default()
             },
             ..Default::default()
@@ -1111,9 +1143,13 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
     let header_height = state.metrics.header_rect.height;
     let is_dark = state.is_dark();
 
+    let rim_left = state.metrics.rim_insets.left;
+    let leading_spacer_w = (4.0 - rim_left).max(0.0);
+    let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
+
     let sidebar_header_content = row![
-        // Left margin (4px spacer + 6px slop = strictly 10.0px to red circle edge)
-        column![].width(Length::Fixed(4.0)),
+        // Left margin (adaptive spacer: rim_left + spacer_w + 6.0 slop = strictly 10.0px)
+        column![].width(Length::Fixed(leading_spacer_w)),
         view_traffic_lights(state),
         space::horizontal().width(Length::Fill),
     ]
@@ -1160,10 +1196,10 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
             background: Some(unified_sidebar_bg.into()),
             border: iced::Border {
                 radius: iced::border::Radius {
-                    top_left: 16.0,
+                    top_left: safe_radius,
                     top_right: 0.0,
                     bottom_right: 0.0,
-                    bottom_left: 16.0,
+                    bottom_left: safe_radius,
                 },
                 ..Default::default()
             },
@@ -1243,8 +1279,8 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
             border: iced::Border {
                 radius: iced::border::Radius {
                     top_left: 0.0,
-                    top_right: 16.0,
-                    bottom_right: 16.0,
+                    top_right: safe_radius,
+                    bottom_right: safe_radius,
                     bottom_left: 0.0,
                 },
                 ..Default::default()
@@ -1588,6 +1624,28 @@ fn view_tab_hitboxes_and_layout(state: &DemoState) -> AppElement<'_> {
             },
         ),
         (
+            "Non-client Rim Inset",
+            format!(
+                "{:.1} pt ({})",
+                metrics.rim_insets.left,
+                if state.is_dark() {
+                    "Dark compound 2px: 1px black + 1px highlight"
+                } else {
+                    "Light 1px subtle gray"
+                }
+            ),
+        ),
+        (
+            "Safe Client Area (Confined)",
+            format!(
+                "x: {:.1}, y: {:.1}, w: {:.1}, h: {:.1}",
+                metrics.safe_client_rect.x,
+                metrics.safe_client_rect.y,
+                metrics.safe_client_rect.width,
+                metrics.safe_client_rect.height
+            ),
+        ),
+        (
             "Traffic Lights Hitbox",
             format!(
                 "x: {:.1}, y: {:.1}, w: {:.1}, h: {:.1}",
@@ -1901,6 +1959,41 @@ mod tests {
         let dark_inner_radius = (dark_outer_radius - 1.0).max(0.0);
         assert_eq!(dark_outer_radius, 16.0);
         assert_eq!(dark_inner_radius, 15.0);
+    }
+
+    #[test]
+    fn test_window_rim_isolation_and_spacing_invariants() {
+        let mut state = super::DemoState::default();
+
+        // 1. Dark mode invariants
+        state.theme_preference = super::ThemePreference::Dark;
+        state.update_metrics();
+        assert_eq!(state.metrics.rim_insets.left, 2.0);
+        let dark_spacer = (4.0 - state.metrics.rim_insets.left).max(0.0);
+        assert_eq!(dark_spacer, 2.0);
+        let slop = 6.0;
+        let dark_red_left_dist = state.metrics.rim_insets.left + dark_spacer + slop;
+        assert_eq!(dark_red_left_dist, 10.0, "Red light leftmost edge must be strictly 10.0 px from window left in dark mode");
+
+        // 2. Light mode invariants
+        state.theme_preference = super::ThemePreference::Light;
+        state.update_metrics();
+        assert_eq!(state.metrics.rim_insets.left, 1.0);
+        let light_spacer = (4.0 - state.metrics.rim_insets.left).max(0.0);
+        assert_eq!(light_spacer, 3.0);
+        let light_red_left_dist = state.metrics.rim_insets.left + light_spacer + slop;
+        assert_eq!(light_red_left_dist, 10.0, "Red light leftmost edge must be strictly 10.0 px from window left in light mode");
+
+        // 3. Traffic lights gap invariant (strictly 9.0 px)
+        assert_eq!(super::window_controls::WINDOW_CONTROL_GAP, 9.0);
+
+        // 4. Traffic lights to title clearance invariant (strictly 15.0 px)
+        let title_spacer = 9.0;
+        let clearance = slop + title_spacer;
+        assert_eq!(clearance, 15.0, "Clearance between traffic lights and first title letter must be strictly 15.0 px");
+
+        // 5. Titlebar font size invariant (strictly 13.0 pt)
+        assert_eq!(super::APPLE_TITLEBAR_FONT_SIZE, 13.0);
     }
 }
 

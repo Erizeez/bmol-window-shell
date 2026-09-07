@@ -51,6 +51,8 @@ pub mod typography {
 ///   1. Outer rim: 1px deep black line (`rgba(0, 0, 0, 0.85)`) to delineate from the shadow and desktop.
 ///   2. Inner rim: 1px subtle light gray highlight bevel (`rgba(255, 255, 255, 0.14)`) providing depth.
 pub mod window_rim {
+    use crate::geometry::Insets;
+
     /// In Light mode: single 1px subtle gray outer rim.
     pub const LIGHT_RIM_WIDTH: f32 = 1.0;
     pub const LIGHT_RIM_COLOR_RGBA: (f32, f32, f32, f32) = (0.0, 0.0, 0.0, 0.10);
@@ -65,6 +67,23 @@ pub mod window_rim {
 
     /// Total physical compound rim thickness in dark mode (1px outer + 1px inner = 2.0px).
     pub const DARK_TOTAL_RIM_WIDTH: f32 = 2.0;
+
+    /// Returns the non-client rim thickness for the specified theme mode.
+    #[must_use]
+    pub const fn rim_thickness(is_dark: bool) -> f32 {
+        if is_dark {
+            DARK_TOTAL_RIM_WIDTH
+        } else {
+            LIGHT_RIM_WIDTH
+        }
+    }
+
+    /// Returns the non-client rim insets for the specified theme mode.
+    #[must_use]
+    pub const fn insets(is_dark: bool) -> Insets {
+        let w = rim_thickness(is_dark);
+        Insets::uniform(w)
+    }
 }
 
 
@@ -175,6 +194,10 @@ impl WindowChromeConfig {
 /// Identifies which semantic zone a given coordinate hits within the window chrome.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WindowHitZone {
+    /// Within the non-client window rim / border area (1px light mode, 2px dark mode).
+    /// This zone belongs strictly to system window framing and MUST NOT be occupied or intercepted
+    /// by downstream application widgets.
+    WindowRim,
     /// Within the traffic lights bounding box (Close / Miniaturize / Zoom).
     TrafficLights,
     /// Empty titlebar / header area where dragging the window is supported.
@@ -192,15 +215,22 @@ pub enum WindowHitZone {
 /// Comprehensive layout metrics and collision bounds computed for a specific window dimension.
 ///
 /// Downstream applications (such as UI toolkits, widgets, or custom renderers) use this structure to:
-/// 1. Avoid overlapping interactive widgets with the traffic lights exclusion zone.
-/// 2. Implement native-style window dragging without intercepting inner widget clicks.
-/// 3. Size and position content views, sidebars, and titlebar separators correctly.
+/// 1. Confine application layout strictly within `safe_client_rect` to prevent rim override.
+/// 2. Avoid overlapping interactive widgets with the traffic lights exclusion zone.
+/// 3. Implement native-style window dragging without intercepting inner widget clicks.
+/// 4. Size and position content views, sidebars, and titlebar separators correctly.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WindowChromeMetrics {
     /// Full window dimensions (width, height).
     pub window_size: (f32, f32),
     /// Active layout mode.
     pub mode: ChromeLayoutMode,
+
+    /// Non-client window rim insets (1.0 px light mode, 2.0 px dark mode).
+    pub rim_insets: Insets,
+    /// Safe client rectangle strictly inside the window rim.
+    /// Downstream application views MUST be contained within this rectangle.
+    pub safe_client_rect: Rect,
 
     /// Exact physical bounding box of the three traffic lights.
     pub traffic_lights_hitbox: Rect,
@@ -234,10 +264,28 @@ pub struct WindowChromeMetrics {
 
 impl WindowChromeMetrics {
     /// Computes the complete chrome metrics and collision map for given window dimensions.
+    ///
+    /// By default, assumes dark mode compound rim (2px) to guarantee safe insets under the
+    /// strictest boundary condition. Use [`WindowChromeMetrics::compute_with_theme`] to
+    /// explicitly configure light vs dark mode rim insets.
     #[must_use]
     pub fn compute(window_width: f32, window_height: f32, config: &WindowChromeConfig) -> Self {
+        Self::compute_with_theme(window_width, window_height, config, true)
+    }
+
+    /// Computes chrome metrics with explicit theme awareness for non-client rim insets.
+    #[must_use]
+    pub fn compute_with_theme(
+        window_width: f32,
+        window_height: f32,
+        config: &WindowChromeConfig,
+        is_dark: bool,
+    ) -> Self {
         let width = window_width.max(1.0);
         let height = window_height.max(1.0);
+
+        let rim_insets = window_rim::insets(is_dark);
+        let safe_client_rect = Rect::new(0.0, 0.0, width, height).insets(rim_insets);
 
         let header_h = config.mode.header_height().min(height);
 
@@ -293,6 +341,8 @@ impl WindowChromeMetrics {
                 Self {
                     window_size: (width, height),
                     mode: config.mode,
+                    rim_insets,
+                    safe_client_rect,
                     traffic_lights_hitbox,
                     traffic_lights_exclusion_zone,
                     header_rect,
@@ -330,6 +380,8 @@ impl WindowChromeMetrics {
                 Self {
                     window_size: (width, height),
                     mode: config.mode,
+                    rim_insets,
+                    safe_client_rect,
                     traffic_lights_hitbox,
                     traffic_lights_exclusion_zone,
                     header_rect,
@@ -352,7 +404,17 @@ impl WindowChromeMetrics {
             return WindowHitZone::Outside;
         }
 
-        // 1. Traffic lights takes highest priority
+        // 0. Non-client window rim intercept:
+        // Reserved strictly for window borders/resizing. Application widgets cannot occupy or intercept this.
+        if px < self.rim_insets.left
+            || px > (self.window_size.0 - self.rim_insets.right)
+            || py < self.rim_insets.top
+            || py > (self.window_size.1 - self.rim_insets.bottom)
+        {
+            return WindowHitZone::WindowRim;
+        }
+
+        // 1. Traffic lights takes highest priority within safe client area
         if self.traffic_lights_hitbox.contains(px, py) {
             return WindowHitZone::TrafficLights;
         }
@@ -529,5 +591,41 @@ mod tests {
             window_rim::DARK_OUTER_RIM_WIDTH + window_rim::DARK_INNER_RIM_WIDTH
         );
         assert_eq!(window_rim::DARK_TOTAL_RIM_WIDTH, 2.0);
+
+        assert_eq!(window_rim::rim_thickness(false), 1.0);
+        assert_eq!(window_rim::rim_thickness(true), 2.0);
+        assert_eq!(window_rim::insets(false), Insets::uniform(1.0));
+        assert_eq!(window_rim::insets(true), Insets::uniform(2.0));
+    }
+
+    #[test]
+    fn test_window_rim_safe_client_area_and_hit_test() {
+        let config = WindowChromeConfig::separate(32.0);
+
+        // Dark mode: 2px compound rim
+        let dark_metrics = WindowChromeMetrics::compute_with_theme(800.0, 600.0, &config, true);
+        assert_eq!(dark_metrics.rim_insets, Insets::uniform(2.0));
+        assert_eq!(dark_metrics.safe_client_rect, Rect::new(2.0, 2.0, 796.0, 596.0));
+
+        // Light mode: 1px subtle rim
+        let light_metrics = WindowChromeMetrics::compute_with_theme(800.0, 600.0, &config, false);
+        assert_eq!(light_metrics.rim_insets, Insets::uniform(1.0));
+        assert_eq!(light_metrics.safe_client_rect, Rect::new(1.0, 1.0, 798.0, 598.0));
+
+        // Hit testing on the rim:
+        // Top-left boundary
+        assert_eq!(dark_metrics.hit_test(0.5, 0.5), WindowHitZone::WindowRim);
+        assert_eq!(dark_metrics.hit_test(1.5, 1.5), WindowHitZone::WindowRim);
+        // Light mode at (1.5, 1.5) is inside the client area
+        assert_eq!(light_metrics.hit_test(0.5, 0.5), WindowHitZone::WindowRim);
+        assert_ne!(light_metrics.hit_test(1.5, 1.5), WindowHitZone::WindowRim);
+
+        // Right and bottom edges
+        assert_eq!(dark_metrics.hit_test(799.0, 300.0), WindowHitZone::WindowRim);
+        assert_eq!(dark_metrics.hit_test(400.0, 599.0), WindowHitZone::WindowRim);
+
+        // Outside window bounds
+        assert_eq!(dark_metrics.hit_test(-1.0, 10.0), WindowHitZone::Outside);
+        assert_eq!(dark_metrics.hit_test(801.0, 10.0), WindowHitZone::Outside);
     }
 }
