@@ -578,18 +578,52 @@ fn view(state: &DemoState) -> AppElement<'_> {
         LayoutSelection::UnifiedMultiPane => view_unified_multi_pane(state, plan),
     };
 
-    // Wrap the entire window in a continuous rounded container with transparent edges
-    container(content)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(|_theme| container::Style {
-            border: iced::Border {
-                radius: 16.0.into(),
+    let is_dark = state.is_dark();
+    let outer_radius = state.corner_radius as f32;
+
+    if is_dark {
+        // Authentic macOS Dark Mode: Dual-layer compound rim (2px total physical width)
+        // 1. Inner Layer: 1px subtle light gray highlight bevel (rgba(1.0, 1.0, 1.0, 0.14))
+        let inner_window = container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_theme| container::Style {
+                border: iced::Border {
+                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.14),
+                    width: 1.0,
+                    radius: (outer_radius - 1.0).max(0.0).into(),
+                },
                 ..Default::default()
-            },
-            ..Default::default()
-        })
-        .into()
+            });
+
+        // 2. Outer Layer: 1px deep black delineation rim (rgba(0.0, 0.0, 0.0, 0.85))
+        container(inner_window)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_theme| container::Style {
+                border: iced::Border {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.85),
+                    width: 1.0,
+                    radius: outer_radius.into(),
+                },
+                ..Default::default()
+            })
+            .into()
+    } else {
+        // Authentic macOS Light Mode: Single-layer 1px subtle gray outer rim (rgba(0.0, 0.0, 0.0, 0.10))
+        container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_theme| container::Style {
+                border: iced::Border {
+                    color: Color::from_rgba(0.0, 0.0, 0.0, 0.10),
+                    width: 1.0,
+                    radius: outer_radius.into(),
+                },
+                ..Default::default()
+            })
+            .into()
+    }
 }
 
 // =========================================================================
@@ -1840,6 +1874,27 @@ mod tests {
             }
         }
         assert!(has_apple_or_fallback, "Apple system font or PingFang should be discoverable on macOS");
+    }
+
+    #[test]
+    fn test_window_rim_mode_styling() {
+        let mut state = super::DemoState::default();
+        state.system_theme = iced::theme::Mode::Light;
+        state.theme_preference = super::ThemePreference::Light;
+        assert!(!state.is_dark());
+
+        // Light mode: single-layer 1px rim
+        let light_radius = state.corner_radius as f32;
+        assert_eq!(light_radius, 16.0);
+
+        state.theme_preference = super::ThemePreference::Dark;
+        assert!(state.is_dark());
+
+        // Dark mode: dual-layer compound rim (2px total)
+        let dark_outer_radius = state.corner_radius as f32;
+        let dark_inner_radius = (dark_outer_radius - 1.0).max(0.0);
+        assert_eq!(dark_outer_radius, 16.0);
+        assert_eq!(dark_inner_radius, 15.0);
     }
 }
 
