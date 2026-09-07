@@ -700,12 +700,12 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> Element<'_,
     let is_dark = state.is_dark();
 
     let titlebar_bg = if is_dark {
-        Color::from_rgba(0.14, 0.15, 0.18, 0.98)
+        Color::from_rgb8(40, 40, 40)
     } else {
-        Color::from_rgba(1.0, 1.0, 1.0, 0.98)
+        Color::from_rgb(1.0, 1.0, 1.0)
     };
     let title_color = if is_dark {
-        Color::from_rgb(0.92, 0.92, 0.95)
+        Color::from_rgb8(164, 164, 164)
     } else {
         Color::from_rgb(0.12, 0.13, 0.15)
     };
