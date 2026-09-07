@@ -853,8 +853,8 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
     .align_y(Alignment::Center);
 
     let titlebar_content = row![
-        // 1. Left leading edge margin (12px + 6px slop = 18px to circle edge, matching GPU origin_x = 18.0)
-        column![].width(Length::Fixed(12.0)),
+        // 1. Left leading edge margin (4px spacer + 6px slop = strictly 10.0px to red circle edge)
+        column![].width(Length::Fixed(4.0)),
         // 2. Custom Apple traffic lights
         view_traffic_lights(state),
         // 3. Strictly 15px clearance between traffic lights and title (9px spacer + 6px slop = 15px)
@@ -971,7 +971,8 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
 
     // 1. Top Header Area (Transparent canvas, owned by downstream application)
     let header_content = row![
-        column![].width(Length::Fixed(12.0)),
+        // Left margin (4px spacer + 6px slop = strictly 10.0px to red circle edge)
+        column![].width(Length::Fixed(4.0)),
         view_traffic_lights(state),
         // Strictly 15px clearance between traffic lights and header title (9px spacer + 6px slop = 15px)
         column![].width(Length::Fixed(9.0)),
@@ -1071,7 +1072,8 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
     let is_dark = state.is_dark();
 
     let sidebar_header_content = row![
-        column![].width(Length::Fixed(12.0)),
+        // Left margin (4px spacer + 6px slop = strictly 10.0px to red circle edge)
+        column![].width(Length::Fixed(4.0)),
         view_traffic_lights(state),
         space::horizontal().width(Length::Fill),
     ]

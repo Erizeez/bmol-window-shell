@@ -11,14 +11,15 @@ pub mod traffic_lights {
     pub const DIAMETER: f32 = 12.0;
     /// Authentic macOS spacing between traffic light buttons (strictly 9.0 px).
     pub const SPACING: f32 = 9.0;
-    pub const LEADING_MARGIN: f32 = 18.0;
+    /// Distance from the left window edge to the leftmost edge of the red light (strictly 10.0 px).
+    pub const LEADING_MARGIN: f32 = 10.0;
     /// Total width across the three lights (12 + 9 + 12 + 9 + 12 = 54.0 px).
     pub const TOTAL_WIDTH: f32 = 54.0;
     pub const HEIGHT: f32 = 12.0;
     /// Clearance distance from the right edge of traffic lights to the first letter of title (strictly 15.0 px).
     pub const TITLE_CLEARANCE: f32 = 15.0;
-    /// Recommended horizontal clearance width including padding.
-    pub const EXCLUSION_WIDTH: f32 = 80.0;
+    /// Recommended horizontal clearance width including padding (10 + 54 + 8 = 72.0 px).
+    pub const EXCLUSION_WIDTH: f32 = 72.0;
 }
 
 /// Typography metrics and recommended Apple font families for window chrome.

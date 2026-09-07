@@ -64,7 +64,7 @@ pub const WINDOW_CONTROL_LARGE_IDS: [GlassId; 3] = [GlassId(120), GlassId(121), 
 pub const WINDOW_CONTROL_INACTIVE_IDS: [GlassId; 3] = [GlassId(130), GlassId(131), GlassId(132)];
 pub const WINDOW_CONTROL_DISABLED_IDS: [GlassId; 3] = [GlassId(140), GlassId(141), GlassId(142)];
 
-pub const WINDOW_CONTROL_NATIVE_X: f32 = 18.0;
+pub const WINDOW_CONTROL_NATIVE_X: f32 = 10.0;
 pub const WINDOW_CONTROL_NATIVE_Y: f32 = 18.0;
 pub const WINDOW_CONTROL_REFERENCE_X: f32 = 240.0;
 pub const WINDOW_CONTROL_REFERENCE_Y: f32 = 196.0;
