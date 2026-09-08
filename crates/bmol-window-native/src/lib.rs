@@ -152,6 +152,16 @@ pub fn configure_window_appearance(target: DesktopBlurTarget, appearance: Window
 /// On Linux, this inspects Desktop Portal preferences, GTK theme settings, and KDE config.
 #[must_use]
 pub fn is_system_dark_mode() -> bool {
+    if let Ok(val) = std::env::var("DARK_MODE") {
+        let val = val.trim().to_lowercase();
+        if val == "1" || val == "true" || val == "dark" {
+            return true;
+        }
+        if val == "0" || val == "false" || val == "light" {
+            return false;
+        }
+    }
+
     #[cfg(target_os = "macos")]
     {
         macos::is_system_dark_mode()

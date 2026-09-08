@@ -21,10 +21,10 @@ pub use crate::platform::traffic_lights::*;
 use crate::platform::traffic_lights as metrics;
 
 // Authentic Apple Vector SVGs
-pub const SVG_CLOSE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="none" stroke="black" stroke-linecap="round" stroke-width="2.6" d="M1.4 1.4 8.6 8.6M8.6 1.4 1.4 8.6"/></svg>"#;
-pub const SVG_MINIMIZE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 4"><path fill="none" stroke="black" stroke-linecap="round" stroke-width="2.5" d="M1.25 2h7.5"/></svg>"#;
-pub const SVG_ZOOM: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.250 114.188 46.031 46.062"><path fill="black" fill-rule="nonzero" d=" M 0.000 122.313 L 0.000 146.688 C 0.000 149.063 2.312 149.875 3.750 148.438 L 34.000 118.188 C 35.406 116.781 34.594 114.438 32.250 114.438 L 7.969 114.438 C 2.656 114.438 0.000 117.063 0.000 122.313 Z M 37.687 160.000 C 42.937 160.000 45.531 157.313 45.531 152.031 L 45.531 127.750 C 45.531 125.375 43.219 124.563 41.781 126.000 L 11.531 156.250 C 10.125 157.656 10.937 160.000 13.281 160.000 Z"/></svg>"#;
-pub const SVG_MAXIMIZE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="none" stroke="black" stroke-linecap="round" stroke-width="2.2" d="M5 1.4v7.2M1.4 5h7.2"/></svg>"#;
+pub const SVG_CLOSE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5"/></svg>"#;
+pub const SVG_MINIMIZE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 4"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2" d="M1.0 2.0h8.0"/></svg>"#;
+pub const SVG_ZOOM: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.250 114.188 46.031 46.062"><path fill="currentColor" fill-rule="nonzero" d=" M 0.000 122.313 L 0.000 146.688 C 0.000 149.063 2.312 149.875 3.750 148.438 L 34.000 118.188 C 35.406 116.781 34.594 114.438 32.250 114.438 L 7.969 114.438 C 2.656 114.438 0.000 117.063 0.000 122.313 Z M 37.687 160.000 C 42.937 160.000 45.531 157.313 45.531 152.031 L 45.531 127.750 C 45.531 125.375 43.219 124.563 41.781 126.000 L 11.531 156.250 C 10.125 157.656 10.937 160.000 13.281 160.000 Z"/></svg>"#;
+pub const SVG_MAXIMIZE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.2" d="M5 1.5v7M1.5 5h7"/></svg>"#;
 
 // Standard macOS traffic light dimensions and aliases
 pub const WINDOW_CONTROL_NATIVE_SIZE: f32 = 14.0;
@@ -219,7 +219,12 @@ impl TrafficLightsState {
 
     pub fn step(&mut self, now: Instant) {
         let dt = if let Some(last) = self.last_tick {
-            now.saturating_duration_since(last).as_secs_f32().min(0.1)
+            let elapsed = now.saturating_duration_since(last).as_secs_f32();
+            if elapsed > 0.0 {
+                elapsed.min(0.1)
+            } else {
+                0.016
+            }
         } else {
             0.016
         };
@@ -360,17 +365,22 @@ pub fn window_control_glyph_color(
 ) -> Color {
     let focus_amount = focus_amount.clamp(0.0, 1.0);
     let active = match action {
-        WindowControlAction::Close => Color::from_rgba(0.38, 0.10, 0.08, 0.92),
-        WindowControlAction::Minimize => Color::from_rgba(0.42, 0.28, 0.03, 0.92),
-        WindowControlAction::Zoom | WindowControlAction::Expand => Color::from_rgba(0.09, 0.32, 0.07, 0.92),
+        WindowControlAction::Close => Color::from_rgb8(0x4C, 0x00, 0x00),
+        WindowControlAction::Minimize => Color::from_rgb8(0x5A, 0x36, 0x00),
+        WindowControlAction::Zoom | WindowControlAction::Expand => Color::from_rgb8(0x0A, 0x38, 0x00),
     };
     let inactive_color = if is_dark {
         Color::from_rgba(0.82, 0.83, 0.86, 0.76)
     } else {
         Color::from_rgba(0.52, 0.53, 0.56, 0.78)
     };
-    let color = if inactive { blend_color(inactive_color, active, focus_amount) } else { active };
-    Color::from_rgba(color.r, color.g, color.b, color.a * focus_amount)
+    let color = if inactive {
+        blend_color(inactive_color, active, focus_amount)
+    } else {
+        active
+    };
+    let alpha = (if is_dark { 0.85 } else { 0.75 }) * focus_amount;
+    Color::from_rgba(color.r, color.g, color.b, alpha)
 }
 
 /// Status dot for disabled or unsaved close control.
@@ -408,27 +418,47 @@ pub fn centered<'a, Message: 'a, Theme: 'a + container::Catalog, Renderer: advan
         .into()
 }
 
-/// Resolves fill and border colors for a button action and state.
+/// Resolves fill and border colors for an active button.
 #[must_use]
-pub fn resolve_button_colors(
+pub fn resolve_active_button_colors(
     action: WindowControlAction,
     is_dark: bool,
-    is_active: bool,
     is_pressed: bool,
     is_hovered: bool,
 ) -> (Color, Color) {
-    if !is_active {
-        let inactive_fill = if is_dark {
-            Color::from_rgb8(0x4C, 0x4C, 0x50)
-        } else {
-            Color::from_rgb8(0xD1, 0xD1, 0xD6)
-        };
-        let inactive_border = if is_dark {
-            Color::from_rgba(0.20, 0.20, 0.22, 0.60)
-        } else {
-            Color::from_rgba(0.70, 0.70, 0.73, 0.80)
-        };
-        (inactive_fill, inactive_border)
+    if is_dark {
+        match action {
+            WindowControlAction::Close => {
+                let fill = if is_pressed {
+                    Color::from_rgb8(0xD3, 0x3B, 0x36)
+                } else if is_hovered {
+                    Color::from_rgb8(0xFF, 0x6E, 0x67)
+                } else {
+                    Color::from_rgb8(0xFF, 0x5F, 0x56)
+                };
+                (fill, Color::from_rgb8(0xB8, 0x32, 0x2B))
+            }
+            WindowControlAction::Minimize => {
+                let fill = if is_pressed {
+                    Color::from_rgb8(0xD7, 0x96, 0x1E)
+                } else if is_hovered {
+                    Color::from_rgb8(0xFF, 0xC8, 0x47)
+                } else {
+                    Color::from_rgb8(0xFF, 0xBD, 0x2E)
+                };
+                (fill, Color::from_rgb8(0xC2, 0x82, 0x16))
+            }
+            WindowControlAction::Zoom | WindowControlAction::Expand => {
+                let fill = if is_pressed {
+                    Color::from_rgb8(0x19, 0xA0, 0x23)
+                } else if is_hovered {
+                    Color::from_rgb8(0x32, 0xD8, 0x4D)
+                } else {
+                    Color::from_rgb8(0x27, 0xC9, 0x3F)
+                };
+                (fill, Color::from_rgb8(0x14, 0x8C, 0x1C))
+            }
+        }
     } else {
         match action {
             WindowControlAction::Close => {
@@ -465,6 +495,38 @@ pub fn resolve_button_colors(
     }
 }
 
+/// Resolves fill and border colors for an inactive button.
+#[must_use]
+pub fn resolve_inactive_button_colors(is_dark: bool) -> (Color, Color) {
+    if is_dark {
+        (
+            Color::from_rgb8(0x4C, 0x4C, 0x50),
+            Color::from_rgba(0.20, 0.20, 0.22, 0.60),
+        )
+    } else {
+        (
+            Color::from_rgb8(0xD1, 0xD1, 0xD6),
+            Color::from_rgba(0.70, 0.70, 0.73, 0.80),
+        )
+    }
+}
+
+/// Resolves fill and border colors for a button action and state.
+#[must_use]
+pub fn resolve_button_colors(
+    action: WindowControlAction,
+    is_dark: bool,
+    is_active: bool,
+    is_pressed: bool,
+    is_hovered: bool,
+) -> (Color, Color) {
+    if !is_active {
+        resolve_inactive_button_colors(is_dark)
+    } else {
+        resolve_active_button_colors(action, is_dark, is_pressed, is_hovered)
+    }
+}
+
 /// Builds a single authentic macOS traffic light button.
 pub fn view_single_button<'a, Message: Clone + 'a, Theme: 'a + container::Catalog + svg::Catalog, Renderer>(
     action: WindowControlAction,
@@ -486,31 +548,66 @@ where
     let is_pressed = scale > 1.03;
     let is_hovered = hover > 0.5;
 
-    let (fill, border) = resolve_button_colors(action, is_dark, is_active, is_pressed, is_hovered);
-    let glyph_color = window_control_glyph_color(is_dark, action, !is_active, hover);
-    let glyph_size = window_control_glyph_size(action, size) * scale;
+    let (active_fill, active_border) =
+        resolve_active_button_colors(action, is_dark, is_pressed, is_hovered);
+    let (fill, border) = if is_active {
+        (active_fill, active_border)
+    } else if hover > 0.0 {
+        let (inactive_fill, inactive_border) = resolve_inactive_button_colors(is_dark);
+        (
+            blend_color(inactive_fill, active_fill, hover),
+            blend_color(inactive_border, active_border, hover),
+        )
+    } else {
+        resolve_inactive_button_colors(is_dark)
+    };
 
-    let svg_str = match action {
-        WindowControlAction::Close => SVG_CLOSE,
-        WindowControlAction::Minimize => SVG_MINIMIZE,
-        WindowControlAction::Zoom | WindowControlAction::Expand => {
-            if is_fullscreen_symbol {
-                SVG_ZOOM
-            } else {
-                SVG_MAXIMIZE
+    let glyph_widget: Element<'a, Message, Theme, Renderer> = if hover < 0.01 {
+        space()
+            .width(Length::Fixed(visual_size))
+            .height(Length::Fixed(visual_size))
+            .into()
+    } else {
+        let glyph_color = window_control_glyph_color(is_dark, action, !is_active, hover);
+        let glyph_size = window_control_glyph_size(action, size) * scale;
+        let svg_str = match action {
+            WindowControlAction::Close => SVG_CLOSE,
+            WindowControlAction::Minimize => SVG_MINIMIZE,
+            WindowControlAction::Zoom | WindowControlAction::Expand => {
+                if is_fullscreen_symbol {
+                    SVG_ZOOM
+                } else {
+                    SVG_MAXIMIZE
+                }
             }
+        };
+
+        let glyph_handle = svg::Handle::from_memory(svg_str.as_bytes());
+        svg(glyph_handle)
+            .width(Length::Fixed(glyph_size))
+            .height(Length::Fixed(glyph_size))
+            .opacity(hover)
+            .style(move |_theme, _status| svg::Style {
+                color: Some(glyph_color),
+            })
+            .into()
+    };
+
+    let shadow = if is_dark {
+        iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+            offset: Vector::new(0.0, 0.5),
+            blur_radius: 1.5,
+        }
+    } else {
+        iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.12),
+            offset: Vector::new(0.0, 0.5),
+            blur_radius: 1.0,
         }
     };
 
-    let glyph_handle = svg::Handle::from_memory(svg_str.as_bytes());
-    let glyph_widget = svg(glyph_handle)
-        .width(Length::Fixed(glyph_size))
-        .height(Length::Fixed(glyph_size))
-        .style(move |_theme, _status| svg::Style {
-            color: Some(glyph_color),
-        });
-
-    let button_body = container(centered(glyph_widget.into(), visual_size))
+    let button_body = container(centered(glyph_widget, visual_size))
         .width(Length::Fixed(visual_size))
         .height(Length::Fixed(visual_size))
         .style(move |_theme| container::Style {
@@ -519,11 +616,7 @@ where
                 .rounded(visual_size * 0.5)
                 .width(0.5)
                 .color(border),
-            shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.12),
-                offset: Vector::new(0.0, 0.5),
-                blur_radius: 1.0,
-            },
+            shadow,
             ..Default::default()
         });
 
@@ -789,5 +882,41 @@ mod tests {
         assert!(config.is_dark);
         assert_eq!(config.hover_progress, 0.8);
         assert_eq!(config.press_scales[0], 1.0);
+    }
+
+    #[test]
+    fn test_traffic_lights_inactive_distinguishes_dark_and_light() {
+        let (dark_fill, dark_border) = resolve_inactive_button_colors(true);
+        let (light_fill, light_border) = resolve_inactive_button_colors(false);
+
+        assert_eq!(dark_fill, Color::from_rgb8(0x4C, 0x4C, 0x50));
+        assert_eq!(light_fill, Color::from_rgb8(0xD1, 0xD1, 0xD6));
+        assert!(light_fill.r > dark_fill.r);
+        assert_ne!(dark_border, light_border);
+    }
+
+    #[test]
+    fn test_traffic_lights_dark_mode_active_borders() {
+        let (_dark_fill, dark_border) =
+            resolve_active_button_colors(WindowControlAction::Close, true, false, false);
+        let (_light_fill, light_border) =
+            resolve_active_button_colors(WindowControlAction::Close, false, false, false);
+
+        assert_eq!(dark_border, Color::from_rgb8(0xB8, 0x32, 0x2B));
+        assert_eq!(light_border, Color::from_rgb8(0xE0, 0x44, 0x3E));
+        assert!(light_border.r > dark_border.r);
+    }
+
+    #[test]
+    fn test_traffic_lights_glyph_color_transparency() {
+        let no_hover = window_control_glyph_color(false, WindowControlAction::Close, false, 0.0);
+        let full_hover_light =
+            window_control_glyph_color(false, WindowControlAction::Close, false, 1.0);
+        let full_hover_dark =
+            window_control_glyph_color(true, WindowControlAction::Close, false, 1.0);
+
+        assert_eq!(no_hover.a, 0.0);
+        assert_eq!(full_hover_light.a, 0.75);
+        assert_eq!(full_hover_dark.a, 0.85);
     }
 }
