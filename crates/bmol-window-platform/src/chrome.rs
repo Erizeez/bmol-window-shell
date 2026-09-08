@@ -209,7 +209,7 @@ pub struct WindowChromeConfig {
 impl Default for WindowChromeConfig {
     fn default() -> Self {
         Self {
-            mode: ChromeLayoutMode::unified_default(Some(220.0)),
+            mode: ChromeLayoutMode::unified_default(Some(window_metrics::SIDEBAR_WIDTH_COMPACT)),
             state: WindowState::Normal,
             scale_factor: 1.0,
             traffic_lights_leading: None,
@@ -583,7 +583,7 @@ impl WindowChromeMetrics {
             return None;
         }
 
-        let corner_slop = 12.0_f32;
+        let corner_slop = window_metrics::RESIZE_CORNER_SIZE;
         let is_left = px <= (self.rim_insets.left + corner_slop);
         let is_right = px >= (self.window_size.0 - self.rim_insets.right - corner_slop);
         let is_top = py <= (self.rim_insets.top + corner_slop);
@@ -665,7 +665,8 @@ mod tests {
         assert_eq!(metrics.header_rect, Rect::new(0.0, 0.0, 800.0, 44.0));
         assert_eq!(metrics.content_rect, Rect::new(0.0, 44.0, 800.0, 556.0));
         assert!(metrics.sidebar_rect.is_none());
-        assert!(metrics.traffic_lights_exclusion_zone.width >= 54.0);
+        assert!(metrics.traffic_lights_exclusion_zone.width >= traffic_lights::EXCLUSION_WIDTH);
+        assert_eq!(metrics.traffic_lights_exclusion_zone.width, 83.0);
 
         // Traffic lights hit
         assert_eq!(
@@ -675,7 +676,7 @@ mod tests {
 
         // Left-aligned title strictly 15px after traffic lights
         let title_rect = metrics.left_aligned_title_rect.expect("left-aligned title exists");
-        assert_eq!(title_rect.x, metrics.traffic_lights_hitbox.max_x() + 15.0);
+        assert_eq!(title_rect.x, metrics.traffic_lights_hitbox.max_x() + traffic_lights::TITLE_CLEARANCE);
 
         // Content hit
         assert_eq!(metrics.hit_test(100.0, 100.0), WindowHitZone::Content);
@@ -820,23 +821,23 @@ mod tests {
         // 1. Unified 52.0px chrome:
         // top margin = (52.0 - 14.0) * 0.5 = 19.0px.
         // Dynamic leading margin must match top margin: tl_x == tl_y == 19.0px.
-        let config_52 = WindowChromeConfig::unified_header(52.0);
+        let config_52 = WindowChromeConfig::unified_header(window_metrics::FUSED_HEADER_HEIGHT);
         let metrics_52 = WindowChromeMetrics::compute(800.0, 600.0, &config_52);
         assert_eq!(metrics_52.traffic_lights_hitbox.y, 19.0);
         assert_eq!(metrics_52.traffic_lights_hitbox.x, 19.0);
-        assert_eq!(metrics_52.traffic_lights_hitbox.width, 60.0);
-        assert_eq!(metrics_52.traffic_lights_hitbox.height, 14.0);
+        assert_eq!(metrics_52.traffic_lights_hitbox.width, traffic_lights::TOTAL_WIDTH);
+        assert_eq!(metrics_52.traffic_lights_hitbox.height, traffic_lights::HEIGHT);
 
         // 2. Separate 32.0px titlebar:
         // top margin = (32.0 - 14.0) * 0.5 = 9.0px.
         // Dynamic leading margin: tl_x == tl_y == 9.0px.
-        let config_32 = WindowChromeConfig::separate(32.0);
+        let config_32 = WindowChromeConfig::separate(window_metrics::COMPACT_TITLEBAR_HEIGHT);
         let metrics_32 = WindowChromeMetrics::compute(800.0, 600.0, &config_32);
         assert_eq!(metrics_32.traffic_lights_hitbox.y, 9.0);
         assert_eq!(metrics_32.traffic_lights_hitbox.x, 9.0);
 
         // 3. Explicit override:
-        let config_custom = WindowChromeConfig::unified_header(52.0)
+        let config_custom = WindowChromeConfig::unified_header(window_metrics::FUSED_HEADER_HEIGHT)
             .with_traffic_lights_leading(10.0);
         let metrics_custom = WindowChromeMetrics::compute(800.0, 600.0, &config_custom);
         assert_eq!(metrics_custom.traffic_lights_hitbox.y, 19.0);
