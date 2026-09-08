@@ -95,13 +95,37 @@ pub mod window_rim {
 }
 
 
+/// Standard window layout metrics, header heights, sidebar widths, and corner curvatures.
+pub mod window_metrics {
+    /// Modern macOS unified toolbar/header height (e.g. System Settings AXToolbar, strictly 52.0 pt).
+    pub const FUSED_HEADER_HEIGHT: f32 = 52.0;
+
+    /// Classic macOS standalone titlebar height (strictly 32.0 pt).
+    pub const COMPACT_TITLEBAR_HEIGHT: f32 = 32.0;
+
+    /// Comfortable standalone titlebar height with generous action clearance (38.0 pt).
+    pub const COMFORTABLE_TITLEBAR_HEIGHT: f32 = 38.0;
+
+    /// Modern macOS regular card-style sidebar width (232.0 pt, matching System Settings).
+    pub const SIDEBAR_WIDTH_REGULAR: f32 = 232.0;
+
+    /// Classic macOS compact sidebar width (220.0 pt).
+    pub const SIDEBAR_WIDTH_COMPACT: f32 = 220.0;
+
+    /// Recommended horizontal inset for sidebar items (10.0 pt).
+    pub const SIDEBAR_CONTENT_INSET: f32 = 10.0;
+
+    /// Standard continuous corner curvature radius for frameless windows (14.0 pt).
+    pub const DEFAULT_CORNER_RADIUS: f32 = 14.0;
+}
+
 /// The layout mode for the window chrome / titlebar.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ChromeLayoutMode {
     /// Separate titlebar mode: The titlebar sits strictly above the content.
     /// Content starts at `y = titlebar_height`.
     Separate {
-        /// Height of the standalone titlebar in logical points (typically 36.0 - 52.0).
+        /// Height of the standalone titlebar in logical points (typically 32.0 - 52.0).
         titlebar_height: f32,
     },
     /// Unified (integrated) chrome mode: Content or sidebar extends all the way
@@ -118,14 +142,16 @@ impl ChromeLayoutMode {
     /// Standalone titlebar with standard height (32.0 pt).
     #[must_use]
     pub const fn separate_default() -> Self {
-        Self::Separate { titlebar_height: 32.0 }
+        Self::Separate {
+            titlebar_height: window_metrics::COMPACT_TITLEBAR_HEIGHT,
+        }
     }
 
     /// Unified chrome with standard header height (52.0 pt) and optional sidebar width (220.0 pt).
     #[must_use]
     pub const fn unified_default(sidebar_width: Option<f32>) -> Self {
         Self::Unified {
-            header_height: 52.0,
+            header_height: window_metrics::FUSED_HEADER_HEIGHT,
             sidebar_width,
         }
     }
