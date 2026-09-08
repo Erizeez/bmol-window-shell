@@ -35,8 +35,7 @@ use liquid_glass::{
 };
 use spring_rs::{Spring, SpringMotion};
 
-#[path = "playground/window_controls.rs"]
-pub mod window_controls;
+pub use liquid_glass_ui::traffic_lights as window_controls;
 
 pub use window_controls::{
     ControlAction, ControlGroup, INTERACTION_ENTER_ANIMATION_TIME_CONSTANT,

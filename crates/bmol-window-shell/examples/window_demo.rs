@@ -24,10 +24,7 @@ use liquid_glass::UiColorScheme;
 mod iced_backend;
 
 use iced_backend::{DemoSurface, Renderer, WindowControlTuning};
-
-#[path = "playground/window_controls.rs"]
-pub mod window_controls;
-
+use liquid_glass_ui::traffic_lights as window_controls;
 use window_controls::{
     ControlAction, TrafficLightsState, WINDOW_CONTROL_NATIVE_IDS, WINDOW_CONTROL_NATIVE_SIZE,
 };

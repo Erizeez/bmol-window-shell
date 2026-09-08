@@ -1385,7 +1385,9 @@ impl graphics::Compositor for Compositor {
                             UiColorScheme::Light => {
                                 [229.0 / 255.0, 229.0 / 255.0, 229.0 / 255.0, 1.0]
                             }
-                            UiColorScheme::Dark => [0.27, 0.27, 0.30, 1.0],
+                            UiColorScheme::Dark => {
+                                [70.0 / 255.0, 70.0 / 255.0, 70.0 / 255.0, 1.0]
+                            }
                         },
                     )
                     .map_err(|_| graphics::compositor::SurfaceError::Other)?;

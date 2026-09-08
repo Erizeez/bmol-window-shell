@@ -8,18 +8,20 @@ use crate::geometry::{Insets, Point, Rect};
 
 /// Default measurements for macOS-style traffic lights.
 pub mod traffic_lights {
-    pub const DIAMETER: f32 = 12.0;
+    /// Authentic macOS traffic light button diameter (strictly 14.0 pt / 28 px on 2x Retina).
+    pub const DIAMETER: f32 = 14.0;
     /// Authentic macOS spacing between traffic light buttons (strictly 9.0 px).
     pub const SPACING: f32 = 9.0;
     /// Distance from the left window edge to the leftmost edge of the red light (strictly 10.0 px).
     pub const LEADING_MARGIN: f32 = 10.0;
-    /// Total width across the three lights (12 + 9 + 12 + 9 + 12 = 54.0 px).
-    pub const TOTAL_WIDTH: f32 = 54.0;
-    pub const HEIGHT: f32 = 12.0;
+    /// Total width across the three lights (14 + 9 + 14 + 9 + 14 = 60.0 px).
+    pub const TOTAL_WIDTH: f32 = 60.0;
+    /// Authentic height matches the button diameter (14.0 pt).
+    pub const HEIGHT: f32 = DIAMETER;
     /// Clearance distance from the right edge of traffic lights to the first letter of title (strictly 15.0 px).
     pub const TITLE_CLEARANCE: f32 = 15.0;
-    /// Recommended horizontal clearance width including padding (10 + 54 + 8 = 72.0 px).
-    pub const EXCLUSION_WIDTH: f32 = 72.0;
+    /// Recommended horizontal clearance width including padding (10 + 60 + 8 = 78.0 px).
+    pub const EXCLUSION_WIDTH: f32 = 78.0;
 }
 
 /// Typography metrics and recommended Apple font families for window chrome.
@@ -778,26 +780,28 @@ mod tests {
     #[test]
     fn test_traffic_lights_dynamic_symmetric_margin() {
         // 1. Unified 52.0px chrome:
-        // top margin = (52.0 - 12.0) * 0.5 = 20.0px.
-        // Dynamic leading margin must match top margin: tl_x == tl_y == 20.0px.
+        // top margin = (52.0 - 14.0) * 0.5 = 19.0px.
+        // Dynamic leading margin must match top margin: tl_x == tl_y == 19.0px.
         let config_52 = WindowChromeConfig::unified_header(52.0);
         let metrics_52 = WindowChromeMetrics::compute(800.0, 600.0, &config_52);
-        assert_eq!(metrics_52.traffic_lights_hitbox.y, 20.0);
-        assert_eq!(metrics_52.traffic_lights_hitbox.x, 20.0);
+        assert_eq!(metrics_52.traffic_lights_hitbox.y, 19.0);
+        assert_eq!(metrics_52.traffic_lights_hitbox.x, 19.0);
+        assert_eq!(metrics_52.traffic_lights_hitbox.width, 60.0);
+        assert_eq!(metrics_52.traffic_lights_hitbox.height, 14.0);
 
         // 2. Separate 32.0px titlebar:
-        // top margin = (32.0 - 12.0) * 0.5 = 10.0px.
-        // Dynamic leading margin: tl_x == tl_y == 10.0px.
+        // top margin = (32.0 - 14.0) * 0.5 = 9.0px.
+        // Dynamic leading margin: tl_x == tl_y == 9.0px.
         let config_32 = WindowChromeConfig::separate(32.0);
         let metrics_32 = WindowChromeMetrics::compute(800.0, 600.0, &config_32);
-        assert_eq!(metrics_32.traffic_lights_hitbox.y, 10.0);
-        assert_eq!(metrics_32.traffic_lights_hitbox.x, 10.0);
+        assert_eq!(metrics_32.traffic_lights_hitbox.y, 9.0);
+        assert_eq!(metrics_32.traffic_lights_hitbox.x, 9.0);
 
         // 3. Explicit override:
         let config_custom = WindowChromeConfig::unified_header(52.0)
             .with_traffic_lights_leading(10.0);
         let metrics_custom = WindowChromeMetrics::compute(800.0, 600.0, &config_custom);
-        assert_eq!(metrics_custom.traffic_lights_hitbox.y, 20.0);
+        assert_eq!(metrics_custom.traffic_lights_hitbox.y, 19.0);
         assert_eq!(metrics_custom.traffic_lights_hitbox.x, 10.0);
     }
 }
