@@ -156,7 +156,10 @@ pub struct WindowChromeConfig {
     /// Display scale factor (e.g. 2.0 for Retina, 1.25/1.5 for Linux fractional scaling).
     pub scale_factor: f32,
     /// Distance from the window left edge to the traffic lights.
-    pub traffic_lights_leading: f32,
+    ///
+    /// When `None` (the default), this is dynamically derived to match the vertical
+    /// top margin (`tl_x == tl_y`), ensuring balanced square symmetry in the window corner.
+    pub traffic_lights_leading: Option<f32>,
     /// Custom vertical offset for traffic lights, or None for automatic vertical centering.
     pub traffic_lights_top_offset: Option<f32>,
     /// Minimum width reserved for title text or toolbar actions.
@@ -169,7 +172,7 @@ impl Default for WindowChromeConfig {
             mode: ChromeLayoutMode::unified_default(Some(220.0)),
             state: WindowState::Normal,
             scale_factor: 1.0,
-            traffic_lights_leading: traffic_lights::LEADING_MARGIN,
+            traffic_lights_leading: None,
             traffic_lights_top_offset: None,
             toolbar_action_reserved_width: 160.0,
         }
@@ -183,7 +186,7 @@ impl WindowChromeConfig {
             mode: ChromeLayoutMode::Separate { titlebar_height },
             state: WindowState::Normal,
             scale_factor: 1.0,
-            traffic_lights_leading: traffic_lights::LEADING_MARGIN,
+            traffic_lights_leading: None,
             traffic_lights_top_offset: None,
             toolbar_action_reserved_width: 140.0,
         }
@@ -198,7 +201,7 @@ impl WindowChromeConfig {
             },
             state: WindowState::Normal,
             scale_factor: 1.0,
-            traffic_lights_leading: traffic_lights::LEADING_MARGIN,
+            traffic_lights_leading: None,
             traffic_lights_top_offset: None,
             toolbar_action_reserved_width: 160.0,
         }
@@ -226,6 +229,20 @@ impl WindowChromeConfig {
     #[must_use]
     pub const fn with_scale_factor(mut self, scale_factor: f32) -> Self {
         self.scale_factor = scale_factor;
+        self
+    }
+
+    /// Configures custom leading margin for traffic lights.
+    #[must_use]
+    pub const fn with_traffic_lights_leading(mut self, leading: f32) -> Self {
+        self.traffic_lights_leading = Some(leading);
+        self
+    }
+
+    /// Configures custom vertical offset for traffic lights.
+    #[must_use]
+    pub const fn with_traffic_lights_top_offset(mut self, offset: f32) -> Self {
+        self.traffic_lights_top_offset = Some(offset);
         self
     }
 }
@@ -342,22 +359,29 @@ impl WindowChromeMetrics {
 
         let header_h = config.mode.header_height().min(height);
 
-        // Traffic lights positioning
+        // Traffic lights positioning:
+        // By default, traffic lights are vertically centered within the header area.
         let tl_y = config.traffic_lights_top_offset.unwrap_or_else(|| {
             ((header_h - traffic_lights::HEIGHT) * 0.5).max(4.0)
         });
+        // In Apple macOS human interface design (especially with unified/fused chrome),
+        // the leading margin of the leftmost button (red close button) dynamically matches
+        // its top margin (tl_x == tl_y) to achieve balanced square symmetry in the corner.
+        // If an explicit leading margin is provided, that override is respected.
+        let tl_x = config.traffic_lights_leading.unwrap_or(tl_y);
+
         let traffic_lights_hitbox = Rect::new(
-            config.traffic_lights_leading,
+            tl_x,
             tl_y,
             traffic_lights::TOTAL_WIDTH,
             traffic_lights::HEIGHT,
         );
 
-        // Exclusion zone: covers the corner up to EXCLUSION_WIDTH
+        // Exclusion zone: covers the corner up to EXCLUSION_WIDTH or (tl_x + TOTAL_WIDTH + padding)
         let traffic_lights_exclusion_zone = Rect::new(
             0.0,
             0.0,
-            traffic_lights::EXCLUSION_WIDTH.max(config.traffic_lights_leading + traffic_lights::TOTAL_WIDTH + 8.0),
+            traffic_lights::EXCLUSION_WIDTH.max(tl_x + traffic_lights::TOTAL_WIDTH + 8.0),
             header_h,
         );
 
@@ -605,7 +629,7 @@ mod tests {
 
         // Traffic lights hit
         assert_eq!(
-            metrics.hit_test(traffic_lights::LEADING_MARGIN + 4.0, 22.0),
+            metrics.hit_test(metrics.traffic_lights_hitbox.x + 4.0, metrics.traffic_lights_hitbox.y + 4.0),
             WindowHitZone::TrafficLights
         );
 
@@ -749,5 +773,31 @@ mod tests {
         assert_eq!(metrics.hit_test_resize_direction(799.5, 300.0), Some(ResizeDirection::Right));
         // Inside window content returns None
         assert_eq!(metrics.hit_test_resize_direction(400.0, 300.0), None);
+    }
+
+    #[test]
+    fn test_traffic_lights_dynamic_symmetric_margin() {
+        // 1. Unified 52.0px chrome:
+        // top margin = (52.0 - 12.0) * 0.5 = 20.0px.
+        // Dynamic leading margin must match top margin: tl_x == tl_y == 20.0px.
+        let config_52 = WindowChromeConfig::unified_header(52.0);
+        let metrics_52 = WindowChromeMetrics::compute(800.0, 600.0, &config_52);
+        assert_eq!(metrics_52.traffic_lights_hitbox.y, 20.0);
+        assert_eq!(metrics_52.traffic_lights_hitbox.x, 20.0);
+
+        // 2. Separate 32.0px titlebar:
+        // top margin = (32.0 - 12.0) * 0.5 = 10.0px.
+        // Dynamic leading margin: tl_x == tl_y == 10.0px.
+        let config_32 = WindowChromeConfig::separate(32.0);
+        let metrics_32 = WindowChromeMetrics::compute(800.0, 600.0, &config_32);
+        assert_eq!(metrics_32.traffic_lights_hitbox.y, 10.0);
+        assert_eq!(metrics_32.traffic_lights_hitbox.x, 10.0);
+
+        // 3. Explicit override:
+        let config_custom = WindowChromeConfig::unified_header(52.0)
+            .with_traffic_lights_leading(10.0);
+        let metrics_custom = WindowChromeMetrics::compute(800.0, 600.0, &config_custom);
+        assert_eq!(metrics_custom.traffic_lights_hitbox.y, 20.0);
+        assert_eq!(metrics_custom.traffic_lights_hitbox.x, 10.0);
     }
 }

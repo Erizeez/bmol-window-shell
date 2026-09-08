@@ -205,19 +205,17 @@ impl DemoState {
         iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme));
         iced_backend::set_window_inactive(!self.window_focused);
 
-        let rim_top = self.metrics.rim_insets.top;
-        let origin_y = match self.layout_selection {
-            LayoutSelection::Separate => {
-                rim_top + (self.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
-            }
+        let rim_insets = self.metrics.rim_insets.top;
+        let header_height = match self.layout_selection {
+            LayoutSelection::Separate => self.separate_titlebar_height,
             LayoutSelection::UnifiedSinglePane | LayoutSelection::UnifiedMultiPane => {
-                rim_top + (self.unified_header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5
+                self.unified_header_height
             }
         };
-        iced_backend::set_window_control_origin(
-            iced_backend::WINDOW_CONTROL_NATIVE_X,
-            origin_y,
-        );
+        let symmetric_margin = ((header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
+        let origin_x = rim_insets + symmetric_margin;
+        let origin_y = rim_insets + symmetric_margin;
+        iced_backend::set_window_control_origin(origin_x, origin_y);
     }
 
     fn sync_native_window(&self) -> Task<Message> {
@@ -747,11 +745,12 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
     let mode_switch = view_header_actions(state);
 
     let rim_left = state.metrics.rim_insets.left;
-    let leading_spacer_w = (4.0 - rim_left).max(0.0);
+    let symmetric_margin = ((titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
+    let leading_spacer_w = (symmetric_margin - 6.0).max(0.0);
     let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
 
     let titlebar_content = row![
-        // 1. Left leading edge margin (adaptive spacer: rim_left + spacer_w + 6.0 slop = strictly 10.0px)
+        // 1. Left leading edge margin (adaptive spacer: spacer_w + 6.0 slop == symmetric_margin)
         column![].width(Length::Fixed(leading_spacer_w)),
         // 2. Custom Apple traffic lights
         view_traffic_lights(state),
@@ -871,12 +870,13 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
     };
 
     let rim_left = state.metrics.rim_insets.left;
-    let leading_spacer_w = (4.0 - rim_left).max(0.0);
+    let symmetric_margin = ((header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
+    let leading_spacer_w = (symmetric_margin - 6.0).max(0.0);
     let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
 
     // 1. Top Header Area (Transparent canvas, owned by downstream application)
     let header_content = row![
-        // Left margin (adaptive spacer: rim_left + spacer_w + 6.0 slop = strictly 10.0px)
+        // Left margin (adaptive spacer: spacer_w + 6.0 slop == symmetric_margin)
         column![].width(Length::Fixed(leading_spacer_w)),
         view_traffic_lights(state),
         // Strictly 15px clearance between traffic lights and header title (9px spacer + 6px slop = 15px)
@@ -946,11 +946,12 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
     let is_dark = state.is_dark();
 
     let rim_left = state.metrics.rim_insets.left;
-    let leading_spacer_w = (4.0 - rim_left).max(0.0);
+    let symmetric_margin = ((header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
+    let leading_spacer_w = (symmetric_margin - 6.0).max(0.0);
     let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
 
     let sidebar_header_content = row![
-        // Left margin (adaptive spacer: rim_left + spacer_w + 6.0 slop = strictly 10.0px)
+        // Left margin (adaptive spacer: spacer_w + 6.0 slop == symmetric_margin)
         column![].width(Length::Fixed(leading_spacer_w)),
         view_traffic_lights(state),
         space::horizontal().width(Length::Fill),
