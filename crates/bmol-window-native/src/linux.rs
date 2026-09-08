@@ -43,6 +43,9 @@ pub fn refresh_desktop_blur(_target: DesktopBlurTarget) {
     // Wayland protocols or window properties.
 }
 
+/// Configures desktop blur radius under Linux compositor environments (Wayland/X11).
+pub fn configure_desktop_blur(_target: DesktopBlurTarget, _radius: i64) {}
+
 /// Configures extended dynamic range (EDR / HDR) on Linux.
 pub fn configure_extended_dynamic_range(_target: DesktopBlurTarget, _enabled: bool) {
     // Wayland color-management protocol integration point.
@@ -58,8 +61,13 @@ pub fn configure_window_shadow(_target: DesktopBlurTarget, _has_shadow: bool) {
     // CSD or compositor shadow property integration point.
 }
 
-/// Configures window appearance (Light, Dark, or System).
 pub fn configure_window_appearance(_target: DesktopBlurTarget, _appearance: WindowAppearance) {}
+
+/// Loads the current system desktop wallpaper on Linux.
+#[must_use]
+pub fn load_system_wallpaper_rgba(_target_w: u32, _target_h: u32) -> Option<(u32, u32, Vec<u8>)> {
+    None
+}
 
 /// Notifies the runtime that the system theme has changed, incrementing the counter.
 pub fn notify_theme_changed() {

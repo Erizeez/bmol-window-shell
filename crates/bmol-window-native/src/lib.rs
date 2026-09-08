@@ -53,6 +53,21 @@ pub fn refresh_desktop_blur(target: DesktopBlurTarget) {
     let _ = target;
 }
 
+/// Configures the native desktop background blur radius for the window.
+///
+/// Setting `radius = 0` completely disables/clears WindowServer background blur,
+/// keeping transparent window backgrounds 100% crystal clear.
+pub fn configure_desktop_blur(target: DesktopBlurTarget, radius: i64) {
+    #[cfg(target_os = "macos")]
+    macos::configure_desktop_blur(target, radius);
+
+    #[cfg(target_os = "linux")]
+    linux::configure_desktop_blur(target, radius);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let _ = (target, radius);
+}
+
 /// Configures the native presentation layer for linear extended dynamic range.
 ///
 /// WGPU selects a floating-point Metal drawable when the surface uses
@@ -196,6 +211,23 @@ pub fn capture_desktop_backdrop(target: DesktopBlurTarget) -> Option<(u32, u32, 
     }
 }
 
+/// Loads the current system desktop wallpaper as tightly packed RGBA8 pixels scaled to (target_w, target_h).
+///
+/// Retrieves the real macOS desktop wallpaper file URL via AppKit `NSWorkspace`, decodes it
+/// hardware-accelerated with Apple ImageIO, and scales it into a tightly packed RGBA8 byte buffer.
+/// Returns `None` if the platform is not macOS or the wallpaper could not be read.
+#[must_use]
+pub fn load_system_wallpaper_rgba(target_w: u32, target_h: u32) -> Option<(u32, u32, Vec<u8>)> {
+    #[cfg(target_os = "macos")]
+    return macos::load_system_wallpaper_rgba(target_w, target_h);
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (target_w, target_h);
+        None
+    }
+}
+
 /// Installs notification observers that reapply the desktop blur after the
 /// window server rebuilds the window's compositor state.
 ///
@@ -306,7 +338,7 @@ mod macos {
         ptr::NonNull,
         sync::{
             OnceLock,
-            atomic::{AtomicU64, Ordering},
+            atomic::{AtomicI64, AtomicU64, Ordering},
         },
     };
 
@@ -319,8 +351,9 @@ mod macos {
     };
     use objc2_app_kit::{
         NSApplication, NSApplicationDidBecomeActiveNotification, NSBitmapImageFileType,
-        NSBitmapImageRep, NSColor, NSImage, NSView, NSWindowDidChangeOcclusionStateNotification,
-        NSWorkspace, NSWorkspaceActiveSpaceDidChangeNotification,
+        NSBitmapImageRep, NSColor, NSGraphicsContext, NSImage, NSScreen, NSView,
+        NSWindowDidChangeOcclusionStateNotification, NSWorkspace,
+        NSWorkspaceActiveSpaceDidChangeNotification,
         NSWorkspaceSessionDidBecomeActiveNotification,
     };
     use objc2_core_foundation::{
@@ -347,10 +380,8 @@ mod macos {
         },
     };
 
-    // Keep the OS backdrop readable. The glass shader supplies the local
-    // optical blur; a large window-wide compositor radius makes the entire
-    // demo look like a frosted screenshot before the shader even runs.
-    const DESKTOP_BLUR_RADIUS: i64 = 28;
+    // Current desktop background blur radius for the window (0 = 100% transparent clear).
+    static DESKTOP_BLUR_RADIUS: AtomicI64 = AtomicI64::new(0);
 
     // These are the same private compositor entry points used by winit's
     // Window::set_blur(true). They are intentionally isolated to this native
@@ -419,6 +450,19 @@ mod macos {
         // objc2 marks this selector unsafe because it relies on the object
         // being a live NSWindow. `view.window()` supplies that live object.
         let window_number = window.windowNumber();
+        reapply_window_blur(window_number);
+    }
+
+    pub fn configure_desktop_blur(target: DesktopBlurTarget, radius: i64) {
+        let Some(ns_view) = std::ptr::NonNull::new(target.0 as *mut c_void) else {
+            return;
+        };
+        let view: &NSView = unsafe { ns_view.cast().as_ref() };
+        let Some(window) = view.window() else {
+            return;
+        };
+        let window_number = window.windowNumber();
+        DESKTOP_BLUR_RADIUS.store(radius, Ordering::SeqCst);
         reapply_window_blur(window_number);
     }
 
@@ -724,6 +768,69 @@ mod macos {
         ))
     }
 
+    pub fn load_system_wallpaper_rgba(target_w: u32, target_h: u32) -> Option<(u32, u32, Vec<u8>)> {
+        let workspace = NSWorkspace::sharedWorkspace();
+        let mtm = MainThreadMarker::new()?;
+        let screen = NSScreen::mainScreen(mtm)?;
+        let url = workspace.desktopImageURLForScreen(&screen)?;
+        let image = NSImage::initWithContentsOfURL(NSImage::alloc(), &url)?;
+
+        let w = target_w.max(1);
+        let h = target_h.max(1);
+
+        let color_space_name = NSString::from_str("NSCalibratedRGBColorSpace");
+        let rep = unsafe {
+            NSBitmapImageRep::initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel(
+                NSBitmapImageRep::alloc(),
+                std::ptr::null_mut(),
+                w as isize,
+                h as isize,
+                8,
+                4,
+                true,
+                false,
+                &color_space_name,
+                (w * 4) as isize,
+                32,
+            )?
+        };
+
+        let ctx = NSGraphicsContext::graphicsContextWithBitmapImageRep(&rep)?;
+        let current = NSGraphicsContext::currentContext();
+        NSGraphicsContext::setCurrentContext(Some(&ctx));
+
+        let dest_rect = objc2_foundation::NSRect {
+            origin: objc2_foundation::NSPoint { x: 0.0, y: 0.0 },
+            size: objc2_foundation::NSSize { width: f64::from(w), height: f64::from(h) },
+        };
+        let src_rect = objc2_foundation::NSRect {
+            origin: objc2_foundation::NSPoint { x: 0.0, y: 0.0 },
+            size: image.size(),
+        };
+
+        let () = unsafe {
+            msg_send![
+                &*image,
+                drawInRect: dest_rect,
+                fromRect: src_rect,
+                operation: 2_isize, // NSCompositingOperationCopy
+                fraction: 1.0_f64
+            ]
+        };
+
+        ctx.flushGraphics();
+        NSGraphicsContext::setCurrentContext(current.as_deref());
+
+        let bitmap_data = rep.bitmapData();
+        if bitmap_data.is_null() {
+            return None;
+        }
+
+        let total_bytes = (w * h * 4) as usize;
+        let slice = unsafe { std::slice::from_raw_parts(bitmap_data, total_bytes) };
+        Some((w, h, slice.to_vec()))
+    }
+
     /// Writes the blur radius through the private CGS entry points.
     ///
     /// This only touches the window-server connection, never an `AppKit`
@@ -734,7 +841,8 @@ mod macos {
         {
             // A non-zero status is intentionally ignored: the next refresh
             // frame will retry while the Stage Manager transition settles.
-            let _ = unsafe { set_blur(main_connection(), window_number, DESKTOP_BLUR_RADIUS) };
+            let radius = DESKTOP_BLUR_RADIUS.load(Ordering::SeqCst);
+            let _ = unsafe { set_blur(main_connection(), window_number, radius) };
         }
     }
 
@@ -1038,5 +1146,16 @@ mod tests {
     fn test_system_theme_detection() {
         let _ = is_system_dark_mode();
         let _ = system_theme_change_counter();
+    }
+
+    #[test]
+    fn test_load_system_wallpaper_rgba() {
+        let wallpaper = load_system_wallpaper_rgba(320, 200);
+        #[cfg(target_os = "macos")]
+        if let Some((w, h, data)) = wallpaper {
+            assert_eq!(w, 320);
+            assert_eq!(h, 200);
+            assert_eq!(data.len(), 320 * 200 * 4);
+        }
     }
 }

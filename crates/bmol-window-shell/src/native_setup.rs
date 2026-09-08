@@ -6,7 +6,7 @@
 use raw_window_handle::RawWindowHandle;
 
 use crate::native::{
-    DesktopBlurTarget, WindowAppearance, configure_extended_dynamic_range,
+    DesktopBlurTarget, WindowAppearance, configure_desktop_blur, configure_extended_dynamic_range,
     configure_window_appearance, configure_window_corner_radius, configure_window_shadow,
     desktop_blur_target, install_stage_manager_guard,
 };
@@ -24,6 +24,8 @@ pub struct NativeWindowOptions {
     pub enable_edr: bool,
     /// Whether to install Stage Manager / Mission Control compositor re-blur guards (defaults to true).
     pub install_stage_manager_guard: bool,
+    /// Native desktop background blur radius (0 = completely transparent clear, defaults to 0).
+    pub desktop_blur_radius: i64,
 }
 
 impl Default for NativeWindowOptions {
@@ -34,6 +36,7 @@ impl Default for NativeWindowOptions {
             enable_shadow: true,
             enable_edr: true,
             install_stage_manager_guard: true,
+            desktop_blur_radius: 0,
         }
     }
 }
@@ -47,6 +50,7 @@ impl NativeWindowOptions {
             enable_shadow: true,
             enable_edr: true,
             install_stage_manager_guard: true,
+            desktop_blur_radius: 0,
         }
     }
 
@@ -93,6 +97,12 @@ impl NativeWindowOptions {
         self.install_stage_manager_guard = install;
         self
     }
+
+    #[must_use]
+    pub const fn with_desktop_blur_radius(mut self, radius: i64) -> Self {
+        self.desktop_blur_radius = radius;
+        self
+    }
 }
 
 /// Hardens and configures a native window surface in a single call.
@@ -103,7 +113,8 @@ impl NativeWindowOptions {
 /// 3. Sets window shadow behavior (clearing default outlines).
 /// 4. Configures smooth squircle corner masking.
 /// 5. Configures extended-linear sRGB / EDR floating point Metal drawable.
-/// 6. Installs notification observers protecting against Stage Manager blur wipes.
+/// 6. Configures native desktop blur radius (defaults to 0 for 100% crystal clear background).
+/// 7. Installs notification observers protecting against Stage Manager blur wipes.
 ///
 /// On Linux, this configures compositor properties and window handles.
 pub fn setup_native_window(
@@ -116,8 +127,9 @@ pub fn setup_native_window(
     configure_window_shadow(target, options.enable_shadow);
     configure_window_corner_radius(target, options.corner_radius);
     configure_extended_dynamic_range(target, options.enable_edr);
+    configure_desktop_blur(target, options.desktop_blur_radius);
 
-    if options.install_stage_manager_guard {
+    if options.install_stage_manager_guard && options.desktop_blur_radius > 0 {
         install_stage_manager_guard(target);
     }
 
