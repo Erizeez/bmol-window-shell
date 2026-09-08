@@ -11,9 +11,6 @@ use crate::platform::{
 };
 
 use super::resizer::resolve_resize_at;
-use super::traffic_lights::{
-    TrafficLightsAction, TrafficLightsConfig, TrafficLightsState, view_traffic_lights,
-};
 use super::{WindowRimConfig, loyal_drag_bar, wrap_window_rim};
 
 /// High-level semantic events detected by the shell controller.
@@ -209,25 +206,6 @@ impl WindowShellController {
         Renderer: iced::advanced::Renderer + 'a,
     {
         loyal_drag_bar(height, content, on_drag, on_double_click)
-    }
-
-    /// Renders standard macOS traffic lights using this controller's appearance and focus state.
-    pub fn view_traffic_lights<'a, Message: 'a + Clone, Theme, Renderer>(
-        &self,
-        state: &'a TrafficLightsState,
-        on_action: impl Fn(TrafficLightsAction) -> Message + 'a,
-        on_group_hover: impl Fn(bool) -> Message + 'a,
-    ) -> Element<'a, Message, Theme, Renderer>
-    where
-        Theme: 'a + iced::widget::container::Catalog + iced::widget::text::Catalog,
-        <Theme as iced::widget::container::Catalog>::Class<'a>:
-            From<iced::widget::container::StyleFn<'a, Theme>>,
-        <Theme as iced::widget::text::Catalog>::Class<'a>:
-            From<iced::widget::text::StyleFn<'a, Theme>>,
-        Renderer: iced::advanced::Renderer + iced::advanced::text::Renderer + 'a,
-    {
-        let config = TrafficLightsConfig::new(self.is_dark, self.is_focused);
-        view_traffic_lights(config, state, on_action, on_group_hover)
     }
 
     /// Resolves resize direction and cursor at coordinate (px, py).

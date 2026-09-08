@@ -3,14 +3,12 @@
 //! Demonstrates the recommended, production-grade integration pattern for
 //! building seamless frameless macOS & Linux desktop applications:
 //! - Physical rim isolation (1px light mode, 2px compound dark mode, collapsed in fullscreen)
-//! - Apple-spec traffic lights (14px diameter, 9px gap, group-hover symbols)
 //! - Loyal drag bar (drag to move, double-click to maximize)
 //! - 8-direction interactive border resizer (hardware cursor auto-switch + drag resize)
 //! - One-shot native window hardening (EDR, Stage Manager guard, squircle corner masking)
 
 use bmol_window_shell::{
-    TrafficLightsAction, TrafficLightsState, WindowChromeConfig, WindowShellController,
-    is_system_dark_mode,
+    WindowChromeConfig, WindowShellController, is_system_dark_mode,
 };
 use iced::widget::{button, column, container, row, space, text};
 use iced::window;
@@ -32,7 +30,6 @@ pub fn main() -> iced::Result {
 
 struct State {
     controller: WindowShellController,
-    traffic_lights: TrafficLightsState,
 }
 
 #[derive(Debug, Clone)]
@@ -42,8 +39,6 @@ enum Message {
     DragWindow,
     ToggleMaximize,
     ResizeWindow(window::Direction),
-    TrafficLightAction(TrafficLightsAction),
-    TrafficLightHover(bool),
     ToggleTheme,
 }
 
@@ -54,10 +49,7 @@ impl State {
         let controller = WindowShellController::new(config, is_dark);
 
         (
-            Self {
-                controller,
-                traffic_lights: TrafficLightsState::new(),
-            },
+            Self { controller },
             Task::none(),
         )
     }
@@ -117,33 +109,6 @@ impl State {
                     Task::none()
                 }
             }
-            Message::TrafficLightAction(action) => match action {
-                TrafficLightsAction::Close => {
-                    if let Some(id) = self.controller.window_id {
-                        window::close(id)
-                    } else {
-                        Task::none()
-                    }
-                }
-                TrafficLightsAction::Minimize => {
-                    if let Some(id) = self.controller.window_id {
-                        window::minimize(id, true)
-                    } else {
-                        Task::none()
-                    }
-                }
-                TrafficLightsAction::Zoom => {
-                    if let Some(id) = self.controller.window_id {
-                        window::toggle_maximize(id)
-                    } else {
-                        Task::none()
-                    }
-                }
-            },
-            Message::TrafficLightHover(hovered) => {
-                self.traffic_lights.set_hovered(hovered);
-                Task::none()
-            }
             Message::ToggleTheme => {
                 self.controller.set_dark_mode(!self.controller.is_dark);
                 Task::none()
@@ -154,17 +119,9 @@ impl State {
     fn view(&self) -> Element<'_, Message> {
         let is_dark = self.controller.is_dark;
 
-        // 1. Header Toolbar with Apple traffic lights, clearance title, and theme toggle
-        let traffic_lights = self.controller.view_traffic_lights(
-            &self.traffic_lights,
-            Message::TrafficLightAction,
-            Message::TrafficLightHover,
-        );
-
+        // 1. Header Toolbar with title, flexible drag area, and theme toggle
         let header_content = row![
-            space().width(Length::Fixed(10.0)), // Left edge clearance to red light: strictly 10px
-            traffic_lights,
-            space().width(Length::Fixed(15.0)), // Green light to title clearance: strictly 15px
+            space().width(Length::Fixed(16.0)),
             text("BMOL Window Shell").size(13).color(if is_dark {
                 Color::from_rgb(0.9, 0.9, 0.9)
             } else {

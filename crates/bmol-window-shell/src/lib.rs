@@ -30,10 +30,8 @@ pub mod iced_ui;
 
 #[cfg(feature = "iced")]
 pub use iced_ui::{
-    NATIVE_TRAFFIC_LIGHT_GAP, NATIVE_TRAFFIC_LIGHT_SIZE, ShellEvent, TrafficLightsAction,
-    TrafficLightsConfig, TrafficLightsState, WindowRimConfig, WindowShellController,
-    loyal_drag_bar, resize_direction_to_interaction, resize_direction_to_window_direction,
-    resolve_resize_at, view_single_button, view_traffic_lights, wrap_border_resizer,
-    wrap_window_rim,
+    ShellEvent, WindowRimConfig, WindowShellController, loyal_drag_bar,
+    resize_direction_to_interaction, resize_direction_to_window_direction, resolve_resize_at,
+    wrap_border_resizer, wrap_window_rim,
 };
 

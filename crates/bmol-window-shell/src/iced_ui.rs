@@ -5,16 +5,11 @@
 
 pub mod controller;
 pub mod resizer;
-pub mod traffic_lights;
 
 pub use controller::{ShellEvent, WindowShellController};
 pub use resizer::{
     resize_direction_to_interaction, resize_direction_to_window_direction, resolve_resize_at,
     wrap_border_resizer,
-};
-pub use traffic_lights::{
-    NATIVE_TRAFFIC_LIGHT_GAP, NATIVE_TRAFFIC_LIGHT_SIZE, TrafficLightsAction, TrafficLightsConfig,
-    TrafficLightsState, view_single_button, view_traffic_lights,
 };
 
 use iced::{
