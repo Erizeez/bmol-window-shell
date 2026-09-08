@@ -22,6 +22,12 @@ pub mod traffic_lights {
     pub const TITLE_CLEARANCE: f32 = 15.0;
     /// Recommended horizontal clearance width including padding (10 + 60 + 8 = 78.0 px).
     pub const EXCLUSION_WIDTH: f32 = 78.0;
+
+    /// Standard hover expansion slop around traffic light buttons for hit testing and gesture tracking.
+    #[must_use]
+    pub const fn control_hover_slop(size: f32) -> f32 {
+        if size > 32.0 { 16.0 } else { 6.0 }
+    }
 }
 
 /// Typography metrics and recommended Apple font families for window chrome.
@@ -117,6 +123,12 @@ pub mod window_metrics {
 
     /// Standard continuous corner curvature radius for frameless windows (14.0 pt).
     pub const DEFAULT_CORNER_RADIUS: f32 = 14.0;
+
+    /// Border hit zone thickness for edge resize handles (6.0 pt).
+    pub const RESIZE_BORDER_THICKNESS: f32 = 6.0;
+
+    /// Corner hit zone square size for corner resize handles (14.0 pt).
+    pub const RESIZE_CORNER_SIZE: f32 = 14.0;
 }
 
 /// The layout mode for the window chrome / titlebar.

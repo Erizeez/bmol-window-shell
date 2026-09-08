@@ -19,7 +19,7 @@ pub use platform::{
     Insets, Point, Rect, ResizeDirection, SidebarBackgroundConfig, SidebarBackgroundExtension,
     WindowChromeConfig, WindowChromeMetrics, WindowConfig, WindowHitZone, WindowState,
     physical_pixels_to_logical, snap_insets_to_physical, snap_to_physical_pixel, traffic_lights,
-    typography, window_rim,
+    typography, window_metrics, window_rim,
 };
 
 pub mod native_setup;

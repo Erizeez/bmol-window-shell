@@ -74,8 +74,8 @@ where
         return content.into();
     }
 
-    let border_thickness = 6.0_f32;
-    let corner_size = 14.0_f32;
+    let border_thickness = bmol_window_platform::window_metrics::RESIZE_BORDER_THICKNESS;
+    let corner_size = bmol_window_platform::window_metrics::RESIZE_CORNER_SIZE;
 
     let make_handle = |w: Length, h: Length, interaction: Interaction, dir: Direction| {
         mouse_area(space().width(w).height(h))
@@ -208,7 +208,10 @@ mod tests {
 
     #[test]
     fn test_resolve_resize_at() {
-        let config = WindowChromeConfig::separate(32.0).with_state(WindowState::Normal);
+        let config = WindowChromeConfig::separate(
+            bmol_window_platform::window_metrics::COMPACT_TITLEBAR_HEIGHT,
+        )
+        .with_state(WindowState::Normal);
         let metrics = WindowChromeMetrics::compute_with_theme(800.0, 600.0, &config, true);
 
         // Top-left corner

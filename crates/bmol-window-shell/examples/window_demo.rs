@@ -11,7 +11,7 @@
 
 use bmol_window_shell::{
     ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics, WindowRimConfig,
-    loyal_drag_bar, wrap_window_rim,
+    loyal_drag_bar, traffic_lights, window_metrics, wrap_window_rim,
 };
 use iced::widget::{
     button, column, container, row, scrollable, slider, space, text, toggler,
@@ -107,7 +107,8 @@ struct DemoState {
 
 impl Default for DemoState {
     fn default() -> Self {
-        let default_config = WindowChromeConfig::separate(32.0);
+        let default_config =
+            WindowChromeConfig::separate(window_metrics::COMPACT_TITLEBAR_HEIGHT);
         let initial_dark = bmol_window_shell::is_system_dark_mode();
         let initial_theme = if initial_dark {
             iced::theme::Mode::Dark
@@ -125,15 +126,15 @@ impl Default for DemoState {
             system_theme: initial_theme,
             traffic_lights: TrafficLightsState::new(),
             window_focused: true,
-            separate_titlebar_height: 32.0,
-            unified_header_height: 54.0,
-            sidebar_width: 220.0,
+            separate_titlebar_height: window_metrics::COMPACT_TITLEBAR_HEIGHT,
+            unified_header_height: window_metrics::FUSED_HEADER_HEIGHT,
+            sidebar_width: window_metrics::SIDEBAR_WIDTH_REGULAR,
             show_hitboxes: false,
             blur_enabled: true,
             system_shadow: false, // Default to FALSE! Eliminates the automatic 1px dark rim macOS draws around windows
             edr_enabled: true,
             guard_enabled: true,
-            corner_radius: 16.0,
+            corner_radius: window_metrics::DEFAULT_CORNER_RADIUS as f64,
             opacity: 0.88,
             native_attached: false,
             metrics,
@@ -253,12 +254,7 @@ fn boot() -> (DemoState, Task<Message>) {
         iced_backend::set_window_control_press_progress(id, 0.0);
         iced_backend::set_window_control_scale(id, 1.0);
     }
-    let rim_top = state.metrics.rim_insets.top;
-    let origin_y = rim_top + (state.separate_titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5;
-    iced_backend::set_window_control_origin(
-        iced_backend::WINDOW_CONTROL_NATIVE_X,
-        origin_y,
-    );
+    state.sync_window_controls_backend();
 
     (
         state,
@@ -368,13 +364,14 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
         }
         Message::ResetDefaults => {
             state.layout_selection = LayoutSelection::Separate;
-            state.separate_titlebar_height = 32.0;
-            state.unified_header_height = 54.0;
+            state.separate_titlebar_height = window_metrics::COMPACT_TITLEBAR_HEIGHT;
+            state.unified_header_height = window_metrics::FUSED_HEADER_HEIGHT;
+            state.sidebar_width = window_metrics::SIDEBAR_WIDTH_REGULAR;
             state.show_hitboxes = false;
             state.blur_enabled = true;
             state.edr_enabled = true;
             state.guard_enabled = true;
-            state.corner_radius = 16.0;
+            state.corner_radius = window_metrics::DEFAULT_CORNER_RADIUS as f64;
             state.opacity = 0.88;
             state.sync_native_window()
         }
@@ -743,16 +740,18 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
 
     let rim_left = state.metrics.rim_insets.left;
     let symmetric_margin = ((titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
-    let leading_spacer_w = (symmetric_margin - 6.0).max(0.0);
+    let slop = traffic_lights::control_hover_slop(WINDOW_CONTROL_NATIVE_SIZE);
+    let leading_spacer_w = (symmetric_margin - slop).max(0.0);
+    let title_clearance_spacer_w = (traffic_lights::TITLE_CLEARANCE - slop).max(0.0);
     let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
 
     let titlebar_content = row![
-        // 1. Left leading edge margin (adaptive spacer: spacer_w + 6.0 slop == symmetric_margin)
+        // 1. Left leading edge margin (adaptive spacer: spacer_w + slop == symmetric_margin)
         column![].width(Length::Fixed(leading_spacer_w)),
         // 2. Custom Apple traffic lights
         view_traffic_lights(state),
-        // 3. Strictly 15px clearance between traffic lights and title (9px spacer + 6px slop = 15px)
-        column![].width(Length::Fixed(9.0)),
+        // 3. Strictly authentic clearance between traffic lights and title
+        column![].width(Length::Fixed(title_clearance_spacer_w)),
         // 4. Left-aligned title text (Apple standard Bold at native 13.0pt, letter 'l' height strictly 10px)
         text("BMOL Window Shell")
             .size(APPLE_TITLEBAR_FONT_SIZE)
@@ -868,16 +867,18 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
 
     let rim_left = state.metrics.rim_insets.left;
     let symmetric_margin = ((header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
-    let leading_spacer_w = (symmetric_margin - 6.0).max(0.0);
+    let slop = traffic_lights::control_hover_slop(WINDOW_CONTROL_NATIVE_SIZE);
+    let leading_spacer_w = (symmetric_margin - slop).max(0.0);
+    let title_clearance_spacer_w = (traffic_lights::TITLE_CLEARANCE - slop).max(0.0);
     let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
 
     // 1. Top Header Area (Transparent canvas, owned by downstream application)
     let header_content = row![
-        // Left margin (adaptive spacer: spacer_w + 6.0 slop == symmetric_margin)
+        // Left margin (adaptive spacer: spacer_w + slop == symmetric_margin)
         column![].width(Length::Fixed(leading_spacer_w)),
         view_traffic_lights(state),
-        // Strictly 15px clearance between traffic lights and header title (9px spacer + 6px slop = 15px)
-        column![].width(Length::Fixed(9.0)),
+        // Strictly authentic clearance between traffic lights and header title
+        column![].width(Length::Fixed(title_clearance_spacer_w)),
         text(match state.active_tab {
             0 => "Window Architecture",
             1 => "Layout & Collision Hitboxes",
@@ -944,11 +945,12 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
 
     let rim_left = state.metrics.rim_insets.left;
     let symmetric_margin = ((header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
-    let leading_spacer_w = (symmetric_margin - 6.0).max(0.0);
+    let slop = traffic_lights::control_hover_slop(WINDOW_CONTROL_NATIVE_SIZE);
+    let leading_spacer_w = (symmetric_margin - slop).max(0.0);
     let safe_radius = (state.corner_radius as f32 - rim_left).max(0.0);
 
     let sidebar_header_content = row![
-        // Left margin (adaptive spacer: spacer_w + 6.0 slop == symmetric_margin)
+        // Left margin (adaptive spacer: spacer_w + slop == symmetric_margin)
         column![].width(Length::Fixed(leading_spacer_w)),
         view_traffic_lights(state),
         space::horizontal().width(Length::Fill),

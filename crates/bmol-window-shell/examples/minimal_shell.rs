@@ -8,7 +8,7 @@
 //! - One-shot native window hardening (EDR, Stage Manager guard, squircle corner masking)
 
 use bmol_window_shell::{
-    WindowChromeConfig, WindowShellController, is_system_dark_mode,
+    WindowChromeConfig, WindowShellController, is_system_dark_mode, window_metrics,
 };
 use iced::widget::{button, column, container, row, space, text};
 use iced::window;
@@ -45,7 +45,7 @@ enum Message {
 impl State {
     fn new() -> (Self, Task<Message>) {
         let is_dark = is_system_dark_mode();
-        let config = WindowChromeConfig::separate(38.0);
+        let config = WindowChromeConfig::separate(window_metrics::COMFORTABLE_TITLEBAR_HEIGHT);
         let controller = WindowShellController::new(config, is_dark);
 
         (
@@ -78,7 +78,7 @@ impl State {
                         let _ = bmol_window_shell::setup_native_window(
                             handle.as_raw(),
                             bmol_window_shell::NativeWindowOptions::new()
-                                .with_corner_radius(10.0),
+                                .with_corner_radius(window_metrics::DEFAULT_CORNER_RADIUS as f64),
                         );
                     }
                 })
@@ -134,11 +134,11 @@ impl State {
             space().width(Length::Fixed(14.0)),
         ]
         .align_y(Alignment::Center)
-        .height(Length::Fixed(38.0))
+        .height(Length::Fixed(window_metrics::COMFORTABLE_TITLEBAR_HEIGHT))
         .width(Length::Fill);
 
         let draggable_header = self.controller.loyal_drag_bar(
-            38.0,
+            window_metrics::COMFORTABLE_TITLEBAR_HEIGHT,
             header_content,
             Message::DragWindow,
             Some(Message::ToggleMaximize),

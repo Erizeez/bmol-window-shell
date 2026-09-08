@@ -244,7 +244,9 @@ mod tests {
 
     #[test]
     fn test_controller_initialization_and_events() {
-        let config = WindowChromeConfig::separate(32.0);
+        let config = WindowChromeConfig::separate(
+            bmol_window_platform::window_metrics::COMPACT_TITLEBAR_HEIGHT,
+        );
         let mut controller = WindowShellController::new(config, true);
 
         assert_eq!(controller.window_size, (900.0, 600.0));
