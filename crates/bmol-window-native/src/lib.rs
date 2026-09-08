@@ -331,6 +331,27 @@ pub fn graphic_icon_png(type_identifier: &str) -> Option<Vec<u8>> {
     }
 }
 
+/// Extracts the authentic native application icon (PNG bytes) for an installed .app path or bundle.
+///
+/// Under macOS, uses `NSWorkspace.shared.icon(forFile:)` which pulls the native 1024x1024 Retina artwork.
+/// Returns `None` on unsupported platforms or when the file does not exist.
+#[must_use]
+pub fn app_icon_png(app_path: &str) -> Option<Vec<u8>> {
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(name) = app_path.strip_prefix("named:") {
+            return macos::system_named_icon_png(name);
+        }
+        return macos::app_icon_png(app_path);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app_path;
+        None
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod macos {
     use std::{
@@ -1136,6 +1157,33 @@ mod macos {
         }?;
         Some(data.to_vec())
     }
+
+    pub fn app_icon_png(app_path: &str) -> Option<Vec<u8>> {
+        let workspace = NSWorkspace::sharedWorkspace();
+        let path_str = NSString::from_str(app_path);
+        let image: Option<Retained<NSImage>> =
+            unsafe { msg_send![&*workspace, iconForFile: &*path_str] };
+        let image = image?;
+        let tiff = image.TIFFRepresentation()?;
+        let bitmap = NSBitmapImageRep::initWithData(NSBitmapImageRep::alloc(), &tiff)?;
+        let properties = NSDictionary::<NSString>::new();
+        let data = unsafe {
+            bitmap.representationUsingType_properties(NSBitmapImageFileType::PNG, &properties)
+        }?;
+        Some(data.to_vec())
+    }
+
+    pub fn system_named_icon_png(name: &str) -> Option<Vec<u8>> {
+        let name_str = NSString::from_str(name);
+        let image = NSImage::imageNamed(&name_str)?;
+        let tiff = image.TIFFRepresentation()?;
+        let bitmap = NSBitmapImageRep::initWithData(NSBitmapImageRep::alloc(), &tiff)?;
+        let properties = NSDictionary::<NSString>::new();
+        let data = unsafe {
+            bitmap.representationUsingType_properties(NSBitmapImageFileType::PNG, &properties)
+        }?;
+        Some(data.to_vec())
+    }
 }
 
 #[cfg(test)]
@@ -1156,6 +1204,18 @@ mod tests {
             assert_eq!(w, 320);
             assert_eq!(h, 200);
             assert_eq!(data.len(), 320 * 200 * 4);
+        }
+    }
+
+    #[test]
+    fn test_app_icon_png_extraction() {
+        #[cfg(target_os = "macos")]
+        {
+            let icon_bytes = app_icon_png("/System/Library/CoreServices/Finder.app");
+            assert!(icon_bytes.is_some());
+            let bytes = icon_bytes.unwrap();
+            assert!(!bytes.is_empty());
+            assert_eq!(&bytes[..4], &[0x89, b'P', b'N', b'G']);
         }
     }
 }

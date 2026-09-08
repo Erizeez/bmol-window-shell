@@ -8,7 +8,7 @@ pub use bmol_window_platform as platform;
 pub use native::{
     DesktopBlurTarget, WindowAppearance, capture_desktop_backdrop, configure_desktop_blur,
     configure_extended_dynamic_range, configure_window_appearance, configure_window_corner_radius,
-    configure_window_shadow, desktop_blur_target, graphic_icon_png, glyph_pdf,
+    configure_window_shadow, desktop_blur_target, graphic_icon_png, app_icon_png, glyph_pdf,
     install_stage_manager_guard, is_system_dark_mode, load_system_wallpaper_rgba, named_asset_png,
     refresh_desktop_blur, system_symbol_pdf, system_theme_change_counter,
 };
@@ -18,9 +18,12 @@ pub use platform::{
     BackdropSource, ChromeDrawPlan, ChromeLayoutMode, DesktopBackdropProvider, DisplayScale,
     Insets, Point, Rect, ResizeDirection, SidebarBackgroundConfig, SidebarBackgroundExtension,
     WindowChromeConfig, WindowChromeMetrics, WindowConfig, WindowHitZone, WindowState,
-    physical_pixels_to_logical, snap_insets_to_physical, snap_to_physical_pixel, traffic_lights,
+    physical_pixels_to_logical, snap_insets_to_physical, snap_to_physical_pixel,
     typography, window_metrics, window_rim,
 };
+
+#[cfg(not(feature = "iced"))]
+pub use platform::traffic_lights;
 
 pub mod native_setup;
 pub use native_setup::{NativeWindowOptions, setup_native_window};
@@ -30,8 +33,10 @@ pub mod iced_ui;
 
 #[cfg(feature = "iced")]
 pub use iced_ui::{
-    ShellEvent, WindowRimConfig, WindowShellController, loyal_drag_bar,
-    resize_direction_to_interaction, resize_direction_to_window_direction, resolve_resize_at,
-    wrap_border_resizer, wrap_window_rim,
+    ControlAction, ShellEvent, TrafficLightsState, TrafficLightsViewConfig,
+    WindowControlAction, WindowRimConfig, WindowShellController, loyal_drag_bar,
+    resize_direction_to_interaction, resize_direction_to_window_direction,
+    resolve_resize_at, traffic_lights, view_traffic_lights, wrap_border_resizer,
+    wrap_window_rim,
 };
 

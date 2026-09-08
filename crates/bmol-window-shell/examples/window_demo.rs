@@ -23,10 +23,10 @@ use liquid_glass::UiColorScheme;
 #[path = "playground/iced_backend.rs"]
 mod iced_backend;
 
-use iced_backend::{DemoSurface, Renderer, WindowControlTuning};
-use liquid_glass_ui::traffic_lights as window_controls;
+use iced_backend::{DemoSurface, Renderer, WINDOW_CONTROL_NATIVE_IDS, WindowControlTuning};
+use bmol_window_shell::traffic_lights as window_controls;
 use window_controls::{
-    ControlAction, TrafficLightsState, WINDOW_CONTROL_NATIVE_IDS, WINDOW_CONTROL_NATIVE_SIZE,
+    ControlAction, TrafficLightsState, WINDOW_CONTROL_NATIVE_SIZE,
 };
 
 type AppElement<'a> = Element<'a, Message, Theme, Renderer>;
@@ -394,7 +394,7 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
                 match action {
                     ControlAction::Close => window::close(id),
                     ControlAction::Minimize => window::minimize(id, true),
-                    ControlAction::Expand => window::toggle_maximize(id),
+                    ControlAction::Expand | ControlAction::Zoom => window::toggle_maximize(id),
                 }
             } else {
                 Task::none()
@@ -501,16 +501,11 @@ fn view(state: &DemoState) -> AppElement<'_> {
 // =========================================================================
 
 fn view_traffic_lights<'a>(state: &'a DemoState) -> AppElement<'a> {
-    let scheme = if state.is_dark() {
-        UiColorScheme::Dark
-    } else {
-        UiColorScheme::Light
-    };
     let inactive = !state.window_focused;
 
-    window_controls::view_traffic_lights(
+    window_controls::view_traffic_lights_interactive(
         &state.traffic_lights,
-        scheme,
+        state.is_dark(),
         inactive,
         Message::WindowControl,
         Message::TrafficLightsPressStart,

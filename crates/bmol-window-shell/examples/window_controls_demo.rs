@@ -35,7 +35,7 @@ use liquid_glass::{
 };
 use spring_rs::{Spring, SpringMotion};
 
-pub use liquid_glass_ui::traffic_lights as window_controls;
+pub use bmol_window_shell::traffic_lights as window_controls;
 
 pub use window_controls::{
     ControlAction, ControlGroup, INTERACTION_ENTER_ANIMATION_TIME_CONSTANT,
@@ -184,7 +184,7 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
                 let command = match action {
                     ControlAction::Close => WindowCommand::Close,
                     ControlAction::Minimize => WindowCommand::Minimize,
-                    ControlAction::Expand => state.window_policy.expand_command(),
+                    ControlAction::Expand | ControlAction::Zoom => state.window_policy.expand_command(),
                 };
                 return state.window.task(command);
             }
@@ -818,17 +818,22 @@ fn control_group(
     expand_behavior: WindowExpandBehavior,
     press_scales: [f32; 3],
 ) -> AppElement<'static> {
+    let shell_expand = if expand_behavior == WindowExpandBehavior::Fullscreen {
+        window_controls::WindowExpandBehavior::Fullscreen
+    } else {
+        window_controls::WindowExpandBehavior::Maximize
+    };
     window_controls::control_group(
         ids,
         size,
         gap,
-        scheme,
+        scheme == UiColorScheme::Dark,
         show_glyphs,
         close_disabled,
         interactive,
         group == ControlGroup::Inactive,
         hover_amount,
-        expand_behavior,
+        shell_expand,
         press_scales,
         move |id, action| Message::ControlPressed { id, action, execute: interactive },
         move |id| Message::ControlPressStarted { id },
