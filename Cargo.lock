@@ -310,10 +310,10 @@ dependencies = [
 
 [[package]]
 name = "bmol-designs"
-version = "0.1.4"
-source = "git+https://github.com/Erizeez/bmol-designs?tag=v0.1.4#debb712c2887277b98cfd5e35bcf0381643efa6b"
+version = "0.1.5"
+source = "git+https://github.com/Erizeez/bmol-designs?tag=v0.1.5#f89226a71f94d412f74a2d307c12147533f9bb7f"
 dependencies = [
- "liquid-rs 0.1.2",
+ "liquid-rs 0.1.3",
  "squircle-rs",
 ]
 
@@ -345,10 +345,10 @@ dependencies = [
 
 [[package]]
 name = "bmol-window-glass"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
- "bmol-designs 0.1.4",
- "liquid-glass-scene 0.1.2",
+ "bmol-designs 0.1.5",
+ "liquid-glass-scene 0.1.3",
 ]
 
 [[package]]
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "bmol-window-native"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "block2 0.6.2",
  "core-graphics",
@@ -392,9 +392,9 @@ dependencies = [
 
 [[package]]
 name = "bmol-window-platform"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
- "bmol-designs 0.1.4",
+ "bmol-designs 0.1.5",
 ]
 
 [[package]]
@@ -412,22 +412,22 @@ dependencies = [
 
 [[package]]
 name = "bmol-window-shell"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
- "bmol-designs 0.1.4",
+ "bmol-designs 0.1.5",
  "bmol-iced",
- "bmol-window-glass 0.1.7",
- "bmol-window-native 0.1.7",
- "bmol-window-platform 0.1.7",
+ "bmol-window-glass 0.1.8",
+ "bmol-window-native 0.1.8",
+ "bmol-window-platform 0.1.8",
  "bytemuck",
  "flate2",
  "iced",
  "iced_wgpu",
  "image",
- "liquid-glass-render 0.1.2",
- "liquid-glass-scene 0.1.2",
+ "liquid-glass-render 0.1.3",
+ "liquid-glass-scene 0.1.3",
  "liquid-glass-ui",
- "liquid-rs 0.1.2",
+ "liquid-rs 0.1.3",
  "macos-typography",
  "pollster",
  "raw-window-handle",
@@ -1741,8 +1741,8 @@ source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.1#89f93492190db92a9f
 
 [[package]]
 name = "liquid-glass-animation"
-version = "0.1.2"
-source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.2#963e0b92115e82ce3b9d3b5e4dd9191243309b60"
+version = "0.1.3"
+source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.3#418f7bcd91847b4eea623e5a1399a2e1f88dd49d"
 
 [[package]]
 name = "liquid-glass-geometry"
@@ -1754,8 +1754,8 @@ dependencies = [
 
 [[package]]
 name = "liquid-glass-geometry"
-version = "0.1.2"
-source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.2#963e0b92115e82ce3b9d3b5e4dd9191243309b60"
+version = "0.1.3"
+source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.3#418f7bcd91847b4eea623e5a1399a2e1f88dd49d"
 dependencies = [
  "squircle-rs",
 ]
@@ -1773,11 +1773,11 @@ dependencies = [
 
 [[package]]
 name = "liquid-glass-render"
-version = "0.1.2"
-source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.2#963e0b92115e82ce3b9d3b5e4dd9191243309b60"
+version = "0.1.3"
+source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.3#418f7bcd91847b4eea623e5a1399a2e1f88dd49d"
 dependencies = [
  "bytemuck",
- "liquid-glass-scene 0.1.2",
+ "liquid-glass-scene 0.1.3",
  "squircle-rs",
  "vibrancy-rs 0.1.1",
  "wgpu",
@@ -1793,10 +1793,10 @@ dependencies = [
 
 [[package]]
 name = "liquid-glass-scene"
-version = "0.1.2"
-source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.2#963e0b92115e82ce3b9d3b5e4dd9191243309b60"
+version = "0.1.3"
+source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.3#418f7bcd91847b4eea623e5a1399a2e1f88dd49d"
 dependencies = [
- "liquid-glass-geometry 0.1.2",
+ "liquid-glass-geometry 0.1.3",
 ]
 
 [[package]]
@@ -1826,13 +1826,13 @@ dependencies = [
 
 [[package]]
 name = "liquid-rs"
-version = "0.1.2"
-source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.2#963e0b92115e82ce3b9d3b5e4dd9191243309b60"
+version = "0.1.3"
+source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.3#418f7bcd91847b4eea623e5a1399a2e1f88dd49d"
 dependencies = [
- "liquid-glass-animation 0.1.2",
- "liquid-glass-geometry 0.1.2",
- "liquid-glass-render 0.1.2",
- "liquid-glass-scene 0.1.2",
+ "liquid-glass-animation 0.1.3",
+ "liquid-glass-geometry 0.1.3",
+ "liquid-glass-render 0.1.3",
+ "liquid-glass-scene 0.1.3",
 ]
 
 [[package]]
