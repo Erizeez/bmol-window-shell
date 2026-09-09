@@ -18,7 +18,7 @@ pub struct NativeWindowOptions {
     pub appearance: WindowAppearance,
     /// Continuous squircle corner radius in points (defaults to 10.0).
     pub corner_radius: f64,
-    /// Whether to enable system window drop shadow (defaults to true).
+    /// Whether to enable system window drop shadow (defaults to false to let the shell own the rim/shadow).
     pub enable_shadow: bool,
     /// Whether to configure extended dynamic range (defaults to true on Apple Silicon / HDR).
     pub enable_edr: bool,
@@ -32,8 +32,8 @@ impl Default for NativeWindowOptions {
     fn default() -> Self {
         Self {
             appearance: WindowAppearance::System,
-            corner_radius: 10.0,
-            enable_shadow: true,
+            corner_radius: 12.0,
+            enable_shadow: false,
             enable_edr: true,
             install_stage_manager_guard: true,
             desktop_blur_radius: 0,
@@ -46,8 +46,8 @@ impl NativeWindowOptions {
     pub const fn new() -> Self {
         Self {
             appearance: WindowAppearance::System,
-            corner_radius: 10.0,
-            enable_shadow: true,
+            corner_radius: 12.0,
+            enable_shadow: false,
             enable_edr: true,
             install_stage_manager_guard: true,
             desktop_blur_radius: 0,

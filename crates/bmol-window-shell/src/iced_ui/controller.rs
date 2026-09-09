@@ -249,6 +249,13 @@ impl WindowShellController {
     }
 
     /// One-shot setup and hardening of the host operating system window.
+    ///
+    /// Applies the unified macOS window invariant:
+    /// - Continuous squircle corner masking conforming to the design tokens
+    /// - Correct Dark/Light Aqua appearance
+    /// - Shadow disabled so the shell's calibrated optical rim/shader acts as the single boundary
+    /// - Extended dynamic range (EDR) enabled on HDR displays
+    /// - Stage Manager / Mission Control blur guards installed
     pub fn setup_native_window(
         &self,
         handle: raw_window_handle::RawWindowHandle,
@@ -263,7 +270,21 @@ impl WindowShellController {
             handle,
             crate::native_setup::NativeWindowOptions::new()
                 .with_appearance(appearance)
-                .with_corner_radius(corner_radius),
+                .with_corner_radius(corner_radius)
+                .with_shadow(false)
+                .with_edr(true)
+                .with_stage_manager_guard(true),
+        )
+    }
+
+    /// One-shot setup and hardening using the design system's default corner radius.
+    pub fn setup_window(
+        &self,
+        handle: raw_window_handle::RawWindowHandle,
+    ) -> Option<crate::native::DesktopBlurTarget> {
+        self.setup_native_window(
+            handle,
+            f64::from(crate::platform::window_metrics::DEFAULT_CORNER_RADIUS),
         )
     }
 
