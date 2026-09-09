@@ -78,7 +78,7 @@ pub mod iced_ui;
 #[cfg(feature = "iced")]
 pub use iced_ui::{
     ControlAction, ShellEvent, TrafficLightButton, TrafficLightsEvent, TrafficLightsState,
-    WindowControlAction, WindowRimConfig, WindowShellController, glass_passthrough,
+    WindowControlAction, WindowRimConfig, WindowScaffold, WindowShellController, glass_passthrough,
     is_document_edited, loyal_drag_bar, resize_direction_to_interaction,
     resize_direction_to_window_direction, resolve_resize_at, set_document_edited,
     set_glass_passthrough, traffic_lights, view_single_button, view_single_button_interactive,

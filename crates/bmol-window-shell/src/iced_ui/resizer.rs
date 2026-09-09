@@ -62,7 +62,7 @@ pub fn resolve_resize_at(
 pub fn wrap_border_resizer<'a, Message: 'a + Clone, Theme: 'a, Renderer>(
     content: impl Into<Element<'a, Message, Theme, Renderer>>,
     is_fullscreen: bool,
-    on_resize: impl Fn(Direction) -> Message + 'a + Copy,
+    on_resize: impl Fn(Direction) -> Message,
 ) -> Element<'a, Message, Theme, Renderer>
 where
     Renderer: iced::advanced::Renderer + 'a,

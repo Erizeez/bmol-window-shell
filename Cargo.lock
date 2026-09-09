@@ -345,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "bmol-window-glass"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "bmol-designs 0.1.3",
  "liquid-glass-scene",
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "bmol-window-native"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "block2 0.6.2",
  "core-graphics",
@@ -392,7 +392,7 @@ dependencies = [
 
 [[package]]
 name = "bmol-window-platform"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "bmol-designs 0.1.3",
 ]
@@ -412,13 +412,13 @@ dependencies = [
 
 [[package]]
 name = "bmol-window-shell"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "bmol-designs 0.1.3",
  "bmol-iced",
- "bmol-window-glass 0.1.4",
- "bmol-window-native 0.1.4",
- "bmol-window-platform 0.1.4",
+ "bmol-window-glass 0.1.5",
+ "bmol-window-native 0.1.5",
+ "bmol-window-platform 0.1.5",
  "bytemuck",
  "flate2",
  "iced",

@@ -18,9 +18,9 @@ edr = []
 theme = []
 
 [dependencies]
-bmol-window-native = { path = "../bmol-window-native", version = "0.1.4" }
-bmol-window-platform = { path = "../bmol-window-platform", version = "0.1.4" }
-bmol-window-glass = { path = "../bmol-window-glass", version = "0.1.4", optional = true }
+bmol-window-native = { path = "../bmol-window-native", version = "0.1.5" }
+bmol-window-platform = { path = "../bmol-window-platform", version = "0.1.5" }
+bmol-window-glass = { path = "../bmol-window-glass", version = "0.1.5", optional = true }
 raw-window-handle = "0.6.2"
 iced = { version = "0.14.0", default-features = false, features = ["wgpu", "advanced", "canvas", "svg", "image-without-codecs", "smol"], optional = true }
 spring-rs = { git = "https://github.com/Erizeez/spring-rs.git", tag = "v0.1.0", optional = true }

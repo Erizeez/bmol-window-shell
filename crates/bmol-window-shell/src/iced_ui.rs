@@ -5,6 +5,7 @@
 
 pub mod controller;
 pub mod resizer;
+pub mod scaffold;
 pub mod traffic_lights;
 
 pub use controller::{ShellEvent, WindowShellController};
@@ -12,6 +13,7 @@ pub use resizer::{
     resize_direction_to_interaction, resize_direction_to_window_direction, resolve_resize_at,
     wrap_border_resizer,
 };
+pub use scaffold::WindowScaffold;
 pub use traffic_lights::{
     ControlAction, TrafficLightButton, TrafficLightsEvent, TrafficLightsState,
     WindowControlAction, is_document_edited, glass_passthrough, set_document_edited, set_glass_passthrough,

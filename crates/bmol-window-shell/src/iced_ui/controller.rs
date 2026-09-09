@@ -158,6 +158,28 @@ impl WindowShellController {
         }
     }
 
+    /// Creates a declarative [`super::scaffold::WindowScaffold`] builder
+    /// wrapping the given client body element.
+    pub fn scaffold<'a, Message: 'a + Clone, Theme, Renderer>(
+        &'a self,
+        body: impl Into<Element<'a, Message, Theme, Renderer>>,
+    ) -> super::scaffold::WindowScaffold<'a, Message, Theme, Renderer>
+    where
+        Theme: 'a + iced::widget::container::Catalog + iced::widget::svg::Catalog + iced::widget::text::Catalog,
+        <Theme as iced::widget::container::Catalog>::Class<'a>:
+            From<iced::widget::container::StyleFn<'a, Theme>>,
+        <Theme as iced::widget::svg::Catalog>::Class<'a>:
+            From<iced::widget::svg::StyleFn<'a, Theme>>,
+        <Theme as iced::widget::text::Catalog>::Class<'a>:
+            From<iced::widget::text::StyleFn<'a, Theme>>,
+        Renderer: iced::advanced::Renderer
+            + iced::advanced::svg::Renderer
+            + iced::advanced::text::Renderer
+            + 'a,
+    {
+        super::scaffold::WindowScaffold::new(self, body)
+    }
+
     /// Wraps the application root element in non-client rims with safe client boundaries.
     pub fn wrap_window<'a, Message: 'a, Theme, Renderer>(
         &self,
@@ -166,7 +188,8 @@ impl WindowShellController {
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog,
-        Theme::Class<'a>: From<iced::widget::container::StyleFn<'a, Theme>>,
+        <Theme as iced::widget::container::Catalog>::Class<'a>:
+            From<iced::widget::container::StyleFn<'a, Theme>>,
         Renderer: iced::advanced::Renderer + 'a,
     {
         wrap_window_rim(
@@ -182,11 +205,12 @@ impl WindowShellController {
         &self,
         content: impl Into<Element<'a, Message, Theme, Renderer>>,
         corner_radius: f32,
-        on_resize: impl Fn(window::Direction) -> Message + 'a + Copy,
+        on_resize: impl Fn(window::Direction) -> Message,
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog,
-        Theme::Class<'a>: From<iced::widget::container::StyleFn<'a, Theme>>,
+        <Theme as iced::widget::container::Catalog>::Class<'a>:
+            From<iced::widget::container::StyleFn<'a, Theme>>,
         Renderer: iced::advanced::Renderer + 'a,
     {
         let wrapped = self.wrap_window(content, corner_radius);
@@ -207,7 +231,8 @@ impl WindowShellController {
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog,
-        Theme::Class<'a>: From<iced::widget::container::StyleFn<'a, Theme>>,
+        <Theme as iced::widget::container::Catalog>::Class<'a>:
+            From<iced::widget::container::StyleFn<'a, Theme>>,
         Renderer: iced::advanced::Renderer + 'a,
     {
         loyal_drag_bar(height, content, on_drag, on_double_click)
@@ -341,7 +366,7 @@ impl WindowShellController {
     /// Builds the pre-fabricated traffic lights widget bound to this window's theme and focus state.
     pub fn traffic_lights_view<'a, Message: Clone + 'a, Theme, Renderer>(
         &'a self,
-        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message + 'a + Copy,
+        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message,
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog + iced::widget::svg::Catalog,
@@ -371,7 +396,7 @@ impl WindowShellController {
     /// of laying it out inside a header row.
     pub fn traffic_lights_overlay<'a, Message: Clone + 'a, Theme, Renderer>(
         &'a self,
-        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message + 'a + Copy,
+        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message,
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog + iced::widget::svg::Catalog,
@@ -399,7 +424,7 @@ impl WindowShellController {
     pub fn traffic_lights_view_with_state<'a, Message: Clone + 'a, Theme, Renderer>(
         &self,
         state: &'a super::traffic_lights::TrafficLightsState,
-        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message + 'a + Copy,
+        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message,
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog + iced::widget::svg::Catalog,

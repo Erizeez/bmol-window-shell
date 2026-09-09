@@ -1321,7 +1321,7 @@ pub fn view_traffic_lights_all_inclusive<'a, Message: Clone + 'a, Theme, Rendere
     state: &'a TrafficLightsState,
     is_focused: bool,
     is_dark: bool,
-    on_event: impl Fn(TrafficLightsEvent) -> Message + 'a + Copy,
+    on_event: impl Fn(TrafficLightsEvent) -> Message,
 ) -> Element<'a, Message, Theme, Renderer>
 where
     Theme: 'a + container::Catalog + iced::widget::svg::Catalog,
