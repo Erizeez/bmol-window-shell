@@ -625,7 +625,7 @@ mod tests {
         assert_eq!(metrics.content_rect, Rect::new(0.0, 44.0, 800.0, 556.0));
         assert!(metrics.sidebar_rect.is_none());
         assert!(metrics.traffic_lights_exclusion_zone.width >= traffic_lights::EXCLUSION_WIDTH);
-        assert_eq!(metrics.traffic_lights_exclusion_zone.width, 97.0);
+        assert_eq!(metrics.traffic_lights_exclusion_zone.width, 83.0);
 
         // Traffic lights hit
         assert_eq!(

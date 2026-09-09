@@ -266,6 +266,34 @@ impl WindowShellController {
         }
     }
 
+    /// Yields a subscription that fires whenever the operating system
+    /// switches between light and dark mode.
+    ///
+    /// Wire this into `Subscription::batch` alongside `animation_subscription`
+    /// and `window::events`. The controller processes the resulting message
+    /// through [`handle_system_theme`] which updates `is_dark`, recomputes
+    /// metrics, and returns a [`ShellEvent::ThemeChanged`] so the application
+    /// can refresh its own theme and derived state.
+    #[cfg(feature = "theme")]
+    #[must_use]
+    pub fn theme_subscription<Message: 'static>(
+        &self,
+        f: impl Fn(iced::theme::Mode) -> Message + 'static + Send + Sync + Clone,
+    ) -> Subscription<Message> {
+        super::system_theme_subscription(f)
+    }
+
+    /// Processes a system theme change, updating `is_dark`, recomputing
+    /// chrome metrics, and returning the semantic event.
+    ///
+    /// Call this from the application's `update` when it receives the message
+    /// produced by [`theme_subscription`].
+    pub fn handle_system_theme(&mut self, mode: iced::theme::Mode) -> ShellEvent {
+        let is_dark = mode == iced::theme::Mode::Dark;
+        self.set_dark_mode(is_dark);
+        ShellEvent::ThemeChanged { is_dark }
+    }
+
     /// Dispatches a high-level `WindowControlAction` using the bound `window_id`.
     pub fn handle_control_action<Message: 'static>(
         &mut self,

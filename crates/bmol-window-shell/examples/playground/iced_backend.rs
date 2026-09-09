@@ -77,9 +77,9 @@ pub const WINDOW_CONTROL_DISABLED_Y: f32 = 544.0;
 /// AppKit's standard traffic-light circle measures 28 px on a 2x display.
 /// Keep the cross-platform sample in logical points so its 1:1 reference is
 /// independent of the backing scale factor.
-pub const WINDOW_CONTROL_NATIVE_SIZE: f32 = 14.0;
+pub const WINDOW_CONTROL_NATIVE_SIZE: f32 = bmol_designs::traffic_lights::DIAMETER;
 pub const WINDOW_CONTROL_LARGE_SIZE: f32 = 64.0;
-pub const WINDOW_CONTROL_GAP: f32 = 9.0;
+pub const WINDOW_CONTROL_GAP: f32 = bmol_designs::traffic_lights::SPACING;
 pub const WINDOW_CONTROL_LARGE_GAP: f32 = 12.0;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

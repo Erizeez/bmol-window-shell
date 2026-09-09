@@ -385,7 +385,7 @@ fn traffic_light_color_for_scheme(
     inactive: bool,
     _close_disabled: bool,
     is_dark: bool,
-    hover: f32,
+    _hover: f32,
     press: f32,
 ) -> Color {
     if inactive {
@@ -401,20 +401,14 @@ fn traffic_light_color_for_scheme(
     // Calibrated source colours. These are deliberately saturated because the
     // glass body contributes a neutral substrate and transmission; a palette
     // matched only to the displayed centre samples would look washed out.
-    // Hover lifts the brightness, press deepens the chromatic saturation.
-    let (base, hover_rgb, press_rgb) = match index {
-        0 => ((1.00, 0.34, 0.28), (1.00, 0.45, 0.40), (1.00, 0.20, 0.14)),
-        1 => ((1.00, 0.72, 0.05), (1.00, 0.83, 0.24), (1.00, 0.62, 0.00)),
-        _ => ((0.18, 0.84, 0.10), (0.27, 0.94, 0.36), (0.06, 0.90, 0.06)),
+    // Press deepens the chromatic saturation; hover only transitions
+    // inactive→active (handled by the caller), not individual highlight.
+    let (base, press_rgb) = match index {
+        0 => ((0.98, 0.34, 0.30), (1.00, 0.56, 0.50)),
+        1 => ((0.98, 0.72, 0.14), (1.00, 0.84, 0.38)),
+        _ => ((0.16, 0.77, 0.22), (0.34, 0.92, 0.42)),
     };
     let mut color = Color::rgba(base.0, base.1, base.2, 0.96);
-    if hover > 0.0 {
-        color = blend_color(
-            color,
-            Color::rgba(hover_rgb.0, hover_rgb.1, hover_rgb.2, 0.96),
-            hover,
-        );
-    }
     if press > 0.0 {
         color = blend_color(
             color,

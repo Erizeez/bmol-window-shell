@@ -293,11 +293,9 @@ impl TrafficLightsState {
 
     pub fn on_press_cancel(&mut self, index: usize) {
         if index < 3 {
+            // Only clear the colour-press indicator; the spring scale stays
+            // enlarged until the mouse button is released (on_press_end).
             self.press_targets[index] = 0.0;
-            self.press_springs[index].retarget(1.0);
-            if self.last_tick.is_none() {
-                self.last_tick = Some(Instant::now());
-            }
         }
     }
 
@@ -325,11 +323,8 @@ impl TrafficLightsState {
             self.hover_progress = self.hover_target;
         }
 
-        for (spring, target) in self.press_springs.iter_mut().zip(self.press_targets.iter()) {
+        for spring in &mut self.press_springs {
             spring.step(dt);
-            if spring.is_settled(0.001, 0.01) && (*target - spring.value()).abs() < 0.001 {
-                spring.retarget(*target);
-            }
         }
 
         if !self.is_animating() {
@@ -416,9 +411,9 @@ pub fn window_control_glyph_color(
 ) -> Color {
     let focus_amount = focus_amount.clamp(0.0, 1.0);
     let active = match action {
-        WindowControlAction::Close => Color::from_rgb8(0x4C, 0x00, 0x00),
-        WindowControlAction::Minimize => Color::from_rgb8(0x5A, 0x36, 0x00),
-        WindowControlAction::Zoom | WindowControlAction::Expand => Color::from_rgb8(0x0A, 0x38, 0x00),
+        WindowControlAction::Close => Color::from_rgb8(0x69, 0x09, 0x05),
+        WindowControlAction::Minimize => Color::from_rgb8(0x7A, 0x50, 0x00),
+        WindowControlAction::Zoom | WindowControlAction::Expand => Color::from_rgb8(0x00, 0x55, 0x00),
     };
     let alpha_factor = if is_dark { 0.85 } else { 0.75 };
     if inactive {
@@ -496,102 +491,69 @@ pub fn resolve_active_sphere_palette(
     action: WindowControlAction,
     is_dark: bool,
     is_pressed: bool,
-    is_hovered: bool,
+    _is_hovered: bool,
 ) -> TrafficLightSpherePalette {
     match action {
         WindowControlAction::Close => {
             if is_pressed {
                 TrafficLightSpherePalette {
-                    top_color: Color::from_rgb8(0xBF, 0x28, 0x1E),
-                    bottom_color: Color::from_rgb8(0xD3, 0x3B, 0x36),
-                    border_color: Color::from_rgb8(0xA0, 0x1E, 0x16),
-                    glow_color: Color::from_rgba(0.80, 0.15, 0.10, 0.28),
-                }
-            } else if is_hovered {
-                TrafficLightSpherePalette {
-                    top_color: Color::from_rgb8(0xFF, 0x5E, 0x54),
-                    bottom_color: Color::from_rgb8(0xFF, 0x93, 0x8C),
+                    top_color: Color::from_rgb8(0xFF, 0x88, 0x80),
+                    bottom_color: Color::from_rgb8(0xFF, 0x9E, 0x96),
                     border_color: Color::from_rgb8(0xDB, 0x35, 0x2C),
-                    glow_color: Color::from_rgba(1.0, 0.35, 0.30, 0.40),
+                    glow_color: Color::from_rgba(1.0, 0.35, 0.30, 0.38),
                 }
             } else {
                 TrafficLightSpherePalette {
-                    top_color: if is_dark {
-                        Color::from_rgb8(0xFF, 0x5F, 0x56)
-                    } else {
-                        Color::from_rgb8(0xFF, 0x5F, 0x56)
-                    },
-                    bottom_color: Color::from_rgb8(0xFF, 0x7E, 0x75),
+                    top_color: Color::from_rgb8(0xFE, 0x5C, 0x52),
+                    bottom_color: Color::from_rgb8(0xFE, 0x74, 0x6C),
                     border_color: if is_dark {
                         Color::from_rgb8(0xB8, 0x32, 0x2B)
                     } else {
                         Color::from_rgb8(0xE0, 0x44, 0x3E)
                     },
-                    glow_color: Color::from_rgba(0.95, 0.25, 0.20, 0.26),
+                    glow_color: Color::from_rgba(0.90, 0.22, 0.18, 0.22),
                 }
             }
         }
         WindowControlAction::Minimize => {
             if is_pressed {
                 TrafficLightSpherePalette {
-                    top_color: Color::from_rgb8(0xC8, 0x88, 0x00),
-                    bottom_color: Color::from_rgb8(0xDB, 0x9A, 0x04),
-                    border_color: Color::from_rgb8(0xA8, 0x70, 0x00),
-                    glow_color: Color::from_rgba(0.85, 0.60, 0.05, 0.25),
-                }
-            } else if is_hovered {
-                TrafficLightSpherePalette {
-                    top_color: Color::from_rgb8(0xFF, 0xC8, 0x22),
-                    bottom_color: Color::from_rgb8(0xFF, 0xEA, 0x80),
+                    top_color: Color::from_rgb8(0xFF, 0xD0, 0x52),
+                    bottom_color: Color::from_rgb8(0xFF, 0xE0, 0x78),
                     border_color: Color::from_rgb8(0xE0, 0xA2, 0x03),
-                    glow_color: Color::from_rgba(1.0, 0.80, 0.20, 0.36),
+                    glow_color: Color::from_rgba(1.0, 0.82, 0.22, 0.35),
                 }
             } else {
                 TrafficLightSpherePalette {
-                    top_color: if is_dark {
-                        Color::from_rgb8(0xFF, 0xBD, 0x2E)
-                    } else {
-                        Color::from_rgb8(0xFF, 0xBD, 0x2E)
-                    },
-                    bottom_color: Color::from_rgb8(0xFF, 0xDF, 0x5D),
+                    top_color: Color::from_rgb8(0xFE, 0xBB, 0x2C),
+                    bottom_color: Color::from_rgb8(0xFE, 0xD2, 0x52),
                     border_color: if is_dark {
                         Color::from_rgb8(0xC2, 0x82, 0x16)
                     } else {
                         Color::from_rgb8(0xDE, 0xA1, 0x23)
                     },
-                    glow_color: Color::from_rgba(1.0, 0.74, 0.15, 0.24),
+                    glow_color: Color::from_rgba(0.95, 0.70, 0.12, 0.20),
                 }
             }
         }
         WindowControlAction::Zoom | WindowControlAction::Expand => {
             if is_pressed {
                 TrafficLightSpherePalette {
-                    top_color: Color::from_rgb8(0x14, 0x8C, 0x1C),
-                    bottom_color: Color::from_rgb8(0x19, 0xA0, 0x23),
-                    border_color: Color::from_rgb8(0x0E, 0x72, 0x14),
-                    glow_color: Color::from_rgba(0.12, 0.60, 0.18, 0.24),
-                }
-            } else if is_hovered {
-                TrafficLightSpherePalette {
-                    top_color: Color::from_rgb8(0x35, 0xDD, 0x4E),
-                    bottom_color: Color::from_rgb8(0x78, 0xF5, 0x8D),
+                    top_color: Color::from_rgb8(0x50, 0xE8, 0x68),
+                    bottom_color: Color::from_rgb8(0x78, 0xF2, 0x8C),
                     border_color: Color::from_rgb8(0x20, 0xBA, 0x38),
-                    glow_color: Color::from_rgba(0.25, 0.90, 0.35, 0.36),
+                    glow_color: Color::from_rgba(0.28, 0.92, 0.38, 0.35),
                 }
             } else {
                 TrafficLightSpherePalette {
-                    top_color: if is_dark {
-                        Color::from_rgb8(0x27, 0xC9, 0x3F)
-                    } else {
-                        Color::from_rgb8(0x27, 0xC9, 0x3F)
-                    },
-                    bottom_color: Color::from_rgb8(0x5E, 0xEA, 0x75),
+                    top_color: Color::from_rgb8(0x28, 0xC6, 0x3E),
+                    bottom_color: Color::from_rgb8(0x4C, 0xDE, 0x64),
                     border_color: if is_dark {
                         Color::from_rgb8(0x14, 0x8C, 0x1C)
                     } else {
                         Color::from_rgb8(0x1A, 0xAB, 0x29)
                     },
-                    glow_color: Color::from_rgba(0.20, 0.82, 0.30, 0.24),
+                    glow_color: Color::from_rgba(0.18, 0.78, 0.28, 0.20),
                 }
             }
         }
@@ -796,6 +758,12 @@ where
 
         if was_pressed && was_hovered && !hovered {
             if let Some(msg) = self.on_press_cancel.clone() {
+                shell.publish(msg);
+            }
+        }
+
+        if was_pressed && !was_hovered && hovered {
+            if let Some(msg) = self.on_press_start.clone() {
                 shell.publish(msg);
             }
         }
@@ -1020,6 +988,7 @@ pub fn view_single_button_interactive<'a, Message: Clone + 'a, Theme, Renderer>(
     is_active: bool,
     hover_progress: f32,
     scale: f32,
+    is_pressed: bool,
     is_fullscreen_symbol: bool,
     on_action: Message,
     on_press_start: Option<Message>,
@@ -1034,12 +1003,12 @@ where
 {
     let visual_size = size * scale;
     let hover = hover_progress.clamp(0.0, 1.0);
-    let is_pressed = scale > 1.03;
-    let is_hovered = hover > 0.5;
 
     // Layer 1: Authentic Liquid Glass Sphere Body with Dark Rim and Subtle Drop Shadow
+    // Hover only reveals the glyph and transitions inactive→active colours;
+    // the brighter "highlight" palette is reserved for press (mouse-down).
     let (active_fill, active_border) =
-        resolve_active_button_colors(action, is_dark, is_pressed, is_hovered);
+        resolve_active_button_colors(action, is_dark, is_pressed, false);
     let (fill, border) = if is_active {
         (active_fill, active_border)
     } else if hover > 0.0 {
@@ -1208,6 +1177,7 @@ where
         is_active,
         hover_progress,
         scale,
+        false,
         is_fullscreen_symbol,
         on_action,
         None,
@@ -1254,6 +1224,7 @@ where
             is_active && !close_disabled,
             hover,
             press_scales[0],
+            false,
             is_fullscreen,
             on_action(ids[0], WindowControlAction::Close),
             Some(on_press_start(ids[0])),
@@ -1281,6 +1252,7 @@ where
             is_active,
             hover,
             press_scales[1],
+            false,
             is_fullscreen,
             on_action(ids[1], WindowControlAction::Minimize),
             Some(on_press_start(ids[1])),
@@ -1308,6 +1280,7 @@ where
             is_active,
             hover,
             press_scales[2],
+            false,
             is_fullscreen,
             on_action(ids[2], WindowControlAction::Expand),
             Some(on_press_start(ids[2])),
@@ -1368,6 +1341,7 @@ where
         is_active,
         hover,
         state.press_springs[0].value(),
+        state.press_targets[0] > 0.5,
         is_fullscreen,
         on_event(TrafficLightsEvent::Action(WindowControlAction::Close)),
         Some(on_event(TrafficLightsEvent::PressStart(0))),
@@ -1382,6 +1356,7 @@ where
         is_active,
         hover,
         state.press_springs[1].value(),
+        state.press_targets[1] > 0.5,
         is_fullscreen,
         on_event(TrafficLightsEvent::Action(WindowControlAction::Minimize)),
         Some(on_event(TrafficLightsEvent::PressStart(1))),
@@ -1396,6 +1371,7 @@ where
         is_active,
         hover,
         state.press_springs[2].value(),
+        state.press_targets[2] > 0.5,
         is_fullscreen,
         on_event(TrafficLightsEvent::Action(WindowControlAction::Zoom)),
         Some(on_event(TrafficLightsEvent::PressStart(2))),
@@ -1454,10 +1430,10 @@ mod tests {
     #[test]
     fn test_traffic_lights_metrics_consistency() {
         assert_eq!(DIAMETER, 14.0);
-        assert_eq!(SPACING, 16.0);
-        assert_eq!(metrics::TOTAL_WIDTH, 74.0);
+        assert_eq!(SPACING, 9.0);
+        assert_eq!(metrics::TOTAL_WIDTH, 60.0);
         assert_eq!(WINDOW_CONTROL_NATIVE_SIZE, 14.0);
-        assert_eq!(WINDOW_CONTROL_GAP, 16.0);
+        assert_eq!(WINDOW_CONTROL_GAP, 9.0);
     }
 
     #[test]
