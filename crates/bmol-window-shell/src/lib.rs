@@ -76,6 +76,9 @@ pub use native_setup::{NativeWindowOptions, setup_native_window};
 pub mod iced_ui;
 
 #[cfg(feature = "iced")]
+pub use squircle_rs as squircle;
+
+#[cfg(feature = "iced")]
 pub use iced_ui::{
     ControlAction, ShellEvent, TrafficLightButton, TrafficLightsEvent, TrafficLightsState,
     WindowControlAction, WindowRimConfig, WindowScaffold, WindowShellController, glass_passthrough,

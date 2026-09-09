@@ -10,7 +10,7 @@ repository.workspace = true
 
 [features]
 default = ["iced"]
-iced = ["dep:iced", "dep:spring-rs", "dep:bmol-window-glass"]
+iced = ["dep:iced", "dep:spring-rs", "dep:squircle-rs", "dep:bmol-window-glass"]
 # Out-of-scope convenience helpers, opt-in per app:
 assets = []
 wallpaper = []
@@ -18,12 +18,13 @@ edr = []
 theme = []
 
 [dependencies]
-bmol-window-native = { path = "../bmol-window-native", version = "0.1.6" }
-bmol-window-platform = { path = "../bmol-window-platform", version = "0.1.6" }
-bmol-window-glass = { path = "../bmol-window-glass", version = "0.1.6", optional = true }
+bmol-window-native = { path = "../bmol-window-native", version = "0.1.7" }
+bmol-window-platform = { path = "../bmol-window-platform", version = "0.1.7" }
+bmol-window-glass = { path = "../bmol-window-glass", version = "0.1.7", optional = true }
 raw-window-handle = "0.6.2"
 iced = { version = "0.14.0", default-features = false, features = ["wgpu", "advanced", "canvas", "svg", "image-without-codecs", "smol"], optional = true }
 spring-rs = { git = "https://github.com/Erizeez/spring-rs.git", tag = "v0.1.0", optional = true }
+squircle-rs = { git = "https://github.com/Erizeez/squircle-rs", tag = "v0.1.2", optional = true }
 
 [dev-dependencies]
 bytemuck = { version = "1.24.0", features = ["derive"] }
@@ -32,11 +33,11 @@ iced_wgpu = { version = "0.14.0", features = ["svg", "image"] }
 flate2 = "1.0"
 image = { version = "0.25.10", default-features = false, features = ["png", "webp"] }
 liquid-glass = { package = "bmol-iced", git = "https://github.com/Erizeez/bmol-iced", tag = "v0.1.3" }
-liquid-rs = { git = "https://github.com/Erizeez/liquid-rs", tag = "v0.1.1" }
-liquid-glass-render = { git = "https://github.com/Erizeez/liquid-rs", tag = "v0.1.1" }
-liquid-glass-scene = { git = "https://github.com/Erizeez/liquid-rs", tag = "v0.1.1" }
+liquid-rs = { git = "https://github.com/Erizeez/liquid-rs", tag = "v0.1.2" }
+liquid-glass-render = { git = "https://github.com/Erizeez/liquid-rs", tag = "v0.1.2" }
+liquid-glass-scene = { git = "https://github.com/Erizeez/liquid-rs", tag = "v0.1.2" }
 liquid-glass-ui = { git = "https://github.com/Erizeez/bmol-iced", tag = "v0.1.3" }
-bmol-designs = { git = "https://github.com/Erizeez/bmol-designs", tag = "v0.1.3" }
+bmol-designs = { git = "https://github.com/Erizeez/bmol-designs", tag = "v0.1.4" }
 pollster = "1.0.1"
 macos-typography = { git = "https://github.com/Erizeez/macos-fonts.git", tag = "v0.1.4" }
 spring-rs = { git = "https://github.com/Erizeez/spring-rs.git", tag = "v0.1.0" }
