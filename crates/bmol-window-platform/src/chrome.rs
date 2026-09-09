@@ -7,28 +7,9 @@
 use crate::geometry::{Insets, Point, Rect};
 
 /// Default measurements for macOS-style traffic lights.
-pub mod traffic_lights {
-    /// Authentic macOS traffic light button diameter (strictly 14.0 pt / 28 px on 2x Retina).
-    pub const DIAMETER: f32 = 14.0;
-    /// Authentic macOS spacing between traffic light buttons (strictly 9.0 px).
-    pub const SPACING: f32 = 9.0;
-    /// Distance from the left window edge to the leftmost edge of the red light (strictly 10.0 px).
-    pub const LEADING_MARGIN: f32 = 10.0;
-    /// Total width across the three lights (14 + 9 + 14 + 9 + 14 = 60.0 px).
-    pub const TOTAL_WIDTH: f32 = 60.0;
-    /// Authentic height matches the button diameter (14.0 pt).
-    pub const HEIGHT: f32 = DIAMETER;
-    /// Clearance distance from the right edge of traffic lights to the first letter of title (strictly 15.0 px).
-    pub const TITLE_CLEARANCE: f32 = 15.0;
-    /// Recommended horizontal clearance width including padding (10 + 60 + 8 = 78.0 px).
-    pub const EXCLUSION_WIDTH: f32 = 78.0;
-
-    /// Standard hover expansion slop around traffic light buttons for hit testing and gesture tracking.
-    #[must_use]
-    pub const fn control_hover_slop(size: f32) -> f32 {
-        if size > 32.0 { 16.0 } else { 6.0 }
-    }
-}
+///
+/// Single source of truth: `bmol_designs::traffic_lights`.
+pub use bmol_designs::traffic_lights;
 
 /// Typography metrics and recommended Apple font families for window chrome.
 pub mod typography {
@@ -102,34 +83,9 @@ pub mod window_rim {
 
 
 /// Standard window layout metrics, header heights, sidebar widths, and corner curvatures.
-pub mod window_metrics {
-    /// Modern macOS unified toolbar/header height (e.g. System Settings AXToolbar, strictly 52.0 pt).
-    pub const FUSED_HEADER_HEIGHT: f32 = 52.0;
-
-    /// Classic macOS standalone titlebar height (strictly 32.0 pt).
-    pub const COMPACT_TITLEBAR_HEIGHT: f32 = 32.0;
-
-    /// Comfortable standalone titlebar height with generous action clearance (38.0 pt).
-    pub const COMFORTABLE_TITLEBAR_HEIGHT: f32 = 38.0;
-
-    /// Modern macOS regular card-style sidebar width (232.0 pt, matching System Settings).
-    pub const SIDEBAR_WIDTH_REGULAR: f32 = 232.0;
-
-    /// Classic macOS compact sidebar width (220.0 pt).
-    pub const SIDEBAR_WIDTH_COMPACT: f32 = 220.0;
-
-    /// Recommended horizontal inset for sidebar items (10.0 pt).
-    pub const SIDEBAR_CONTENT_INSET: f32 = 10.0;
-
-    /// Standard continuous corner curvature radius for frameless windows (14.0 pt).
-    pub const DEFAULT_CORNER_RADIUS: f32 = 14.0;
-
-    /// Border hit zone thickness for edge resize handles (6.0 pt).
-    pub const RESIZE_BORDER_THICKNESS: f32 = 6.0;
-
-    /// Corner hit zone square size for corner resize handles (14.0 pt).
-    pub const RESIZE_CORNER_SIZE: f32 = 14.0;
-}
+///
+/// Single source of truth: `bmol_designs::window_metrics`.
+pub use bmol_designs::window_metrics;
 
 /// The layout mode for the window chrome / titlebar.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -399,16 +355,19 @@ impl WindowChromeMetrics {
 
         let header_h = config.mode.header_height().min(height);
 
-        // Traffic lights positioning:
-        // By default, traffic lights are vertically centered within the header area.
-        let tl_y = config.traffic_lights_top_offset.unwrap_or_else(|| {
-            ((header_h - traffic_lights::HEIGHT) * 0.5).max(4.0)
-        });
-        // In Apple macOS human interface design (especially with unified/fused chrome),
-        // the leading margin of the leftmost button (red close button) dynamically matches
-        // its top margin (tl_x == tl_y) to achieve balanced square symmetry in the corner.
-        // If an explicit leading margin is provided, that override is respected.
-        let tl_x = config.traffic_lights_leading.unwrap_or(tl_y);
+        // Traffic lights positioning.
+        //
+        // Geometry is derived from the titlebar height `H`: the red (close)
+        // button centre sits exactly at `(H/2, H/2)`, concentric with the
+        // window corner radius `R = H/2`, and the pitch is `H/2` (see
+        // `bmol_designs::window_geometry`). Explicit overrides still win.
+        let (center_x, center_y) = bmol_designs::window_geometry::traffic_light_center(header_h);
+        let tl_y = config
+            .traffic_lights_top_offset
+            .unwrap_or(center_y - traffic_lights::HEIGHT * 0.5);
+        let tl_x = config
+            .traffic_lights_leading
+            .unwrap_or(center_x - traffic_lights::DIAMETER * 0.5);
 
         let traffic_lights_hitbox = Rect::new(
             tl_x,
@@ -666,7 +625,7 @@ mod tests {
         assert_eq!(metrics.content_rect, Rect::new(0.0, 44.0, 800.0, 556.0));
         assert!(metrics.sidebar_rect.is_none());
         assert!(metrics.traffic_lights_exclusion_zone.width >= traffic_lights::EXCLUSION_WIDTH);
-        assert_eq!(metrics.traffic_lights_exclusion_zone.width, 83.0);
+        assert_eq!(metrics.traffic_lights_exclusion_zone.width, 97.0);
 
         // Traffic lights hit
         assert_eq!(

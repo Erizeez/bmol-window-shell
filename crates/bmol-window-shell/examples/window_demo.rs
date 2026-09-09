@@ -501,17 +501,27 @@ fn view(state: &DemoState) -> AppElement<'_> {
 // =========================================================================
 
 fn view_traffic_lights<'a>(state: &'a DemoState) -> AppElement<'a> {
-    let inactive = !state.window_focused;
-
-    window_controls::view_traffic_lights_interactive(
+    window_controls::view_traffic_lights_all_inclusive(
         &state.traffic_lights,
+        state.window_focused,
         state.is_dark(),
-        inactive,
-        Message::WindowControl,
-        Message::TrafficLightsPressStart,
-        Message::TrafficLightsPressCancel,
-        Message::TrafficLightsPressEnd,
-        Message::TrafficLightsHover,
+        |event| match event {
+            window_controls::TrafficLightsEvent::GroupHover(hovered) => {
+                Message::TrafficLightsHover(hovered)
+            }
+            window_controls::TrafficLightsEvent::PressStart(index) => {
+                Message::TrafficLightsPressStart(index)
+            }
+            window_controls::TrafficLightsEvent::PressCancel(index) => {
+                Message::TrafficLightsPressCancel(index)
+            }
+            window_controls::TrafficLightsEvent::PressEnd(index) => {
+                Message::TrafficLightsPressEnd(index)
+            }
+            window_controls::TrafficLightsEvent::Action(action) => {
+                Message::WindowControl(action)
+            }
+        },
     )
 }
 

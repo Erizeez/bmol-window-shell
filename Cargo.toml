@@ -4,6 +4,7 @@ members = [
     "crates/bmol-window-shell",
     "crates/bmol-window-native",
     "crates/bmol-window-platform",
+    "crates/bmol-window-glass",
 ]
 
 [workspace.package]

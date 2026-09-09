@@ -13,8 +13,9 @@ pub use resizer::{
     wrap_border_resizer,
 };
 pub use traffic_lights::{
-    ControlAction, TrafficLightsState, TrafficLightsViewConfig, WindowControlAction,
-    view_traffic_lights,
+    ControlAction, TrafficLightButton, TrafficLightsEvent, TrafficLightsState,
+    WindowControlAction, is_document_edited, glass_passthrough, set_document_edited, set_glass_passthrough,
+    view_single_button, view_single_button_interactive, view_traffic_lights_all_inclusive,
 };
 
 use iced::{
@@ -187,6 +188,28 @@ where
     }
 
     area.into()
+}
+
+/// Streams the operating system light/dark appearance.
+///
+/// iced already listens to the platform, so the window shell simply maps that
+/// `Mode` stream into the application's message. This is the single supported
+/// way for a shell app to follow the system theme.
+#[cfg(feature = "theme")]
+pub fn system_theme_subscription<Message: 'static>(
+    f: impl Fn(iced::theme::Mode) -> Message + 'static + Send + Sync + Clone,
+) -> iced::Subscription<Message> {
+    iced::system::theme_changes().map(f)
+}
+
+/// Returns the initial OS dark-mode state synchronously, for boot state.
+///
+/// Use [`system_theme_subscription`] for subsequent changes so the shell and
+/// the app never disagree about the current appearance.
+#[cfg(feature = "theme")]
+#[must_use]
+pub fn initial_system_dark_mode() -> bool {
+    crate::native::is_system_dark_mode()
 }
 
 #[cfg(test)]

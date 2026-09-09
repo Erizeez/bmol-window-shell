@@ -1,6 +1,6 @@
 [package]
-name = "bmol-window-platform"
-description = "Platform-neutral window and backdrop configuration for BMOL window shell."
+name = "bmol-window-glass"
+description = "GPU physical-glass macOS traffic lights for bmol-window-shell."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,8 +8,9 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[dependencies]
+liquid-glass-scene = { path = "../../../liquid-rs/crates/liquid-glass-scene", version = "0.1.0" }
+bmol-designs = { path = "../../../bmol-designs", version = "0.1.0" }
+
 [lints]
 workspace = true
-
-[dependencies]
-bmol-designs = { path = "../../../bmol-designs", version = "0.1.0" }
