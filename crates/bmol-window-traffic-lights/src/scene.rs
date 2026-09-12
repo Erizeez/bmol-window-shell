@@ -58,11 +58,16 @@ pub fn traffic_light_material(
     let fields = tuning.material_fields([color.r, color.g, color.b, color.a], inactive, focus);
 
     let mut material = GlassMaterial::regular();
-    // Back on the physical variant: the flat bead variant is still being
-    // integrated (it needs to feed the bead colour into the normal composition
-    // instead of returning before it, and its screen-space geometry is not yet
-    // verified), so the laboratory renders what is known to be correct.
-    material.variant = GlassVariant::TrafficLightPhysical;
+    // Reference bead or physical glass. The bead variant is not finished yet:
+    // its screen-space geometry is unverified and it returns before the normal
+    // composition, so switching it on renders a wrong (and mis-placed) control.
+    // Flip this to `true` to compare the two.
+    const USE_REFERENCE_BEAD: bool = false;
+    material.variant = if USE_REFERENCE_BEAD {
+        GlassVariant::TrafficLightBead
+    } else {
+        GlassVariant::TrafficLightPhysical
+    };
     material.bead = BeadStyle {
         b1: fields.bead[0],
         b2: fields.bead[1],
