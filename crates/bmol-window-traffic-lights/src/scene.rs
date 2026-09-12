@@ -4,6 +4,8 @@
 //! [`GlassNode`]s. It reads one [`TrafficLightsFrame`] snapshot per call, so the
 //! spheres and the Iced glyph layer are always driven by the same numbers.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use liquid_glass_scene::{
     BeadStyle, Color, CoreLight, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
     GlassVariant, InteractionResponse, Rect, RimProfile, TrafficLightStyle,
@@ -58,12 +60,7 @@ pub fn traffic_light_material(
     let fields = tuning.material_fields([color.r, color.g, color.b, color.a], inactive, focus);
 
     let mut material = GlassMaterial::regular();
-    // Reference bead or physical glass. The bead variant is not finished yet:
-    // its screen-space geometry is unverified and it returns before the normal
-    // composition, so switching it on renders a wrong (and mis-placed) control.
-    // Flip this to `true` to compare the two.
-    const USE_REFERENCE_BEAD: bool = false;
-    material.variant = if USE_REFERENCE_BEAD {
+    material.variant = if reference_bead() {
         GlassVariant::TrafficLightBead
     } else {
         GlassVariant::TrafficLightPhysical
@@ -133,6 +130,26 @@ pub fn traffic_light_material(
 /// this share into every state, so it is a property of the control rather than
 /// of the pointer response.
 pub const TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE: f32 = 0.6;
+
+/// When enabled, the traffic lights render the reference flat bead instead of
+/// physical glass.
+///
+/// The bead variant is not finished yet: its screen-space geometry is
+/// unverified and it returns before the normal composition, so enabling it
+/// renders a wrong and mis-placed control. It is a runtime switch so the two
+/// appearances can be compared without a rebuild.
+static REFERENCE_BEAD: AtomicBool = AtomicBool::new(false);
+
+/// Selects the reference flat bead instead of physical glass.
+pub fn set_reference_bead(enabled: bool) {
+    REFERENCE_BEAD.store(enabled, Ordering::Relaxed);
+}
+
+/// Returns whether the reference flat bead is selected.
+#[must_use]
+pub fn reference_bead() -> bool {
+    REFERENCE_BEAD.load(Ordering::Relaxed)
+}
 
 /// Bounds of control `index` inside a group, given its current press scale.
 ///

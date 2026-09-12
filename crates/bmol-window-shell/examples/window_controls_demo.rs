@@ -41,7 +41,8 @@ pub use window_controls::{
     WINDOW_CONTROL_LARGE_SIZE, WINDOW_CONTROL_LARGE_X, WINDOW_CONTROL_LARGE_Y,
     WINDOW_CONTROL_NATIVE_IDS, WINDOW_CONTROL_NATIVE_SIZE, WINDOW_CONTROL_NATIVE_X,
     WINDOW_CONTROL_NATIVE_Y, WINDOW_CONTROL_REFERENCE_IDS, WINDOW_CONTROL_REFERENCE_X,
-    WINDOW_CONTROL_REFERENCE_Y, WindowExpandBehavior, window_control_group,
+    WINDOW_CONTROL_REFERENCE_Y, WindowExpandBehavior, reference_bead, set_reference_bead,
+    window_control_group,
 };
 
 type AppElement<'a> = Element<'a, Message, Theme, Renderer>;
@@ -199,6 +200,7 @@ enum Message {
     CopyConfiguration,
     ToggleScheme,
     ToggleDocumentEdited,
+    ToggleMaterialVariant,
     SystemThemeChanged(iced::theme::Mode),
 }
 
@@ -399,6 +401,14 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             iced_backend::set_color_scheme(state.scheme);
             iced_backend::set_window_control_tuning(state.tuning);
         }
+        Message::ToggleMaterialVariant => {
+            set_reference_bead(!reference_bead());
+            state.last_action = if reference_bead() {
+                "Material: reference flat bead (work in progress)".into()
+            } else {
+                "Material: physical glass".into()
+            };
+        }
         Message::ToggleDocumentEdited => {
             state.document_edited = !state.document_edited;
             state.last_action = if state.document_edited {
@@ -470,6 +480,12 @@ fn view(state: &State) -> AppElement<'_> {
                     false => "Mark document edited",
                 }))
                 .on_press(Message::ToggleDocumentEdited)
+                .padding([7, 12]),
+                button(text(match reference_bead() {
+                    true => "Material: reference bead",
+                    false => "Material: physical glass",
+                }))
+                .on_press(Message::ToggleMaterialVariant)
                 .padding([7, 12]),
                 button(text("Copy configuration"))
                     .on_press(Message::CopyConfiguration)
