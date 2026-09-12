@@ -36,7 +36,7 @@
 //!   3. Unified Chrome, multi-pane: a sidebar that runs to the top edge, with
 //!      automatic traffic-light clearance.
 //! - Full window dragging across the titlebar drag regions.
-//! - Live controls for the chome knobs: SkyLight blur radius and opacity,
+//! - Live controls for the chrome knobs: `SkyLight` blur radius and opacity,
 //!   corner radius, EDR, the native system shadow, and the Stage Manager
 //!   guard. Toggling them re-runs the one-shot native setup.
 
