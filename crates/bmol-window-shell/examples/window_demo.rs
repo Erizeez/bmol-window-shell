@@ -72,7 +72,6 @@ enum Message {
     ResetDefaults,
     ToggleMaximize,
     DragWindow,
-    WindowControl(ControlAction),
     TrafficLights(window_controls::TrafficLightsEvent),
     AnimationFrame(std::time::Instant),
     WindowFocused(bool),
@@ -378,17 +377,6 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
         Message::DragWindow => {
             if let Some(id) = state.window_id {
                 window::drag(id)
-            } else {
-                Task::none()
-            }
-        }
-        Message::WindowControl(action) => {
-            if let Some(id) = state.window_id {
-                match action {
-                    ControlAction::Close => window::close(id),
-                    ControlAction::Minimize => window::minimize(id, true),
-                    ControlAction::Expand | ControlAction::Zoom => window::toggle_maximize(id),
-                }
             } else {
                 Task::none()
             }

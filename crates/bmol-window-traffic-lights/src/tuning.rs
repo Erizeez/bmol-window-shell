@@ -1,9 +1,8 @@
 //! Physical-glass material knobs for the traffic-light spheres.
 //!
-//! The traffic-light *effect* — the `TrafficLightPhysical` variant, its
-//! [`liquid_glass_scene::TrafficLightStyle`], and the WGSL that implements it —
-//! lives in liquid-rs. This module only holds the numbers that select and
-//! shape that effect.
+//! The traffic-light *effect* -- the `TrafficLightBead` variant and the WGSL
+//! that implements it -- lives in liquid-rs. This module only holds the numbers
+//! that select and shape that effect.
 
 /// Runtime optical controls for the traffic-light physical material.
 ///

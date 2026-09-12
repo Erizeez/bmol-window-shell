@@ -17,9 +17,9 @@ iced = ["dep:iced"]
 [dependencies]
 # Design tokens (diameter, spacing, leading margin, hover slop).
 bmol-designs = { git = "https://github.com/Erizeez/bmol-designs", branch = "main" }
-# Renderer-agnostic scene model. The traffic-light *effect* (the
-# `TrafficLightPhysical` variant, its `TrafficLightStyle`, and the WGSL that
-# implements it) lives in liquid-rs; this crate only tunes and instantiates it.
+# Renderer-agnostic scene model. The traffic-light *effect* -- the
+# `TrafficLightBead` variant and the WGSL that implements it -- lives in
+# liquid-rs; this crate only tunes and instantiates it.
 liquid-glass-scene = { git = "https://github.com/Erizeez/liquid-rs", branch = "main" }
 # Spring physics for the press scale. Not optional: the state machine is the
 # crate's core and must stay usable outside a GUI.

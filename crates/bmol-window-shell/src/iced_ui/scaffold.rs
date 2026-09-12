@@ -34,6 +34,21 @@ pub struct WindowScaffold<'a, Message, Theme, Renderer> {
     double_click_zoom: bool,
 }
 
+impl<Message, Theme, Renderer> std::fmt::Debug
+    for WindowScaffold<'_, Message, Theme, Renderer>
+{
+    /// The scaffold holds boxed closures for the drag, resize and traffic-light
+    /// callbacks, so it cannot derive `Debug`; report the data it does have.
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WindowScaffold")
+            .field("title", &self.title)
+            .field("corner_radius", &self.corner_radius)
+            .field("double_click_zoom", &self.double_click_zoom)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a, Message: 'a + Clone, Theme, Renderer> WindowScaffold<'a, Message, Theme, Renderer>
 where
     Theme: 'a + iced::widget::container::Catalog + iced::widget::svg::Catalog + iced::widget::text::Catalog,
