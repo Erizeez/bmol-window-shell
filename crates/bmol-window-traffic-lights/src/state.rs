@@ -385,6 +385,24 @@ mod tests {
     }
 
     #[test]
+    fn step_advances_from_the_wall_clock() {
+        // The application drives the state machine through `step(Instant)`, not
+        // `advance(dt)`. Cover that path explicitly: it is the one the demo
+        // actually runs.
+        let mut state = TrafficLightsState::new();
+        let t0 = Instant::now();
+        state.step(t0);
+        state.on_press_start(0);
+
+        state.step(t0 + std::time::Duration::from_millis(16));
+        let after_one = state.press_scale(0);
+        assert!(after_one > 1.0, "wall-clock step did not move the spring: {after_one}");
+
+        state.step(t0 + std::time::Duration::from_millis(32));
+        assert!(state.press_scale(0) > after_one, "spring did not keep advancing");
+    }
+
+    #[test]
     fn cancel_keeps_the_control_enlarged_until_release() {
         let mut state = TrafficLightsState::new();
         state.on_press_start(1);
