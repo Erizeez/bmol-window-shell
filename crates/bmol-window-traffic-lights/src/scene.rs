@@ -58,10 +58,11 @@ pub fn traffic_light_material(
     let fields = tuning.material_fields([color.r, color.g, color.b, color.a], inactive, focus);
 
     let mut material = GlassMaterial::regular();
-    // The reference appearance is a flat bead, not physical glass: this variant
-    // returns early in the shader, before the backdrop/refraction/Fresnel
-    // composition, so the physical knobs below are inert for it.
-    material.variant = GlassVariant::TrafficLightBead;
+    // Back on the physical variant: the flat bead variant is still being
+    // integrated (it needs to feed the bead colour into the normal composition
+    // instead of returning before it, and its screen-space geometry is not yet
+    // verified), so the laboratory renders what is known to be correct.
+    material.variant = GlassVariant::TrafficLightPhysical;
     material.bead = BeadStyle {
         b1: fields.bead[0],
         b2: fields.bead[1],
@@ -282,13 +283,13 @@ mod tests {
     }
 
     #[test]
-    fn traffic_lights_use_the_reference_bead_material() {
+    fn traffic_lights_use_the_physical_material_with_bead_parameters_ready() {
         let tuning = WindowControlTuning::default();
         let traffic =
             traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), false, false, tuning, 1.0);
         let stock = GlassMaterial::regular();
 
-        assert_eq!(traffic.variant, GlassVariant::TrafficLightBead);
+        assert_eq!(traffic.variant, GlassVariant::TrafficLightPhysical);
         assert_eq!(traffic.refraction.thickness, stock.refraction.thickness);
         assert_eq!(traffic.refraction.index, stock.refraction.index);
         assert_eq!(traffic.refraction.strength, tuning.refraction_strength);
