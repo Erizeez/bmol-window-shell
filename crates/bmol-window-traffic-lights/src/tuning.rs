@@ -53,6 +53,26 @@ pub struct WindowControlTuning {
     pub vertical_floor: f32,
     /// Exponent of the grazing term; larger keeps absorption near the edge.
     pub grazing_power: f32,
+    /// Droplet profile control points of the flat bead (all zero is `(1-t)^4`).
+    pub bead_b1: f32,
+    pub bead_b2: f32,
+    pub bead_b3: f32,
+    /// Vertical axial glow strength of the flat bead.
+    pub bead_center_glow: f32,
+    /// Core saturation lift of the flat bead.
+    pub bead_saturation_lift: f32,
+    /// Bright-edge strength (dark appearance only).
+    pub bead_highlight_intensity: f32,
+    /// Dark-rim strength (light appearance only).
+    pub bead_dark_rim_intensity: f32,
+    /// Bright-edge span factor.
+    pub bead_core_span_factor: f32,
+    /// Dark-rim span factor.
+    pub bead_rim_span_factor: f32,
+    /// Caustic multiplier of the axial glow, light appearance.
+    pub bead_caustic_light: f32,
+    /// Caustic multiplier of the axial glow, dark appearance.
+    pub bead_caustic_dark: f32,
 }
 
 impl WindowControlTuning {
@@ -89,6 +109,17 @@ impl WindowControlTuning {
             lateral_power: 2.0,
             vertical_floor: 0.28,
             grazing_power: 0.85,
+            bead_b1: 0.0,
+            bead_b2: 0.0,
+            bead_b3: 0.0,
+            bead_center_glow: 1.0,
+            bead_saturation_lift: 0.25,
+            bead_highlight_intensity: 0.85,
+            bead_dark_rim_intensity: 2.0,
+            bead_core_span_factor: 1.0,
+            bead_rim_span_factor: 1.0,
+            bead_caustic_light: 1.10,
+            bead_caustic_dark: 0.80,
         }
     }
 
@@ -130,6 +161,17 @@ impl WindowControlTuning {
                 lateral_power: 2.0,
                 vertical_floor: 0.28,
                 grazing_power: 0.85,
+                bead_b1: 0.0,
+                bead_b2: 0.0,
+                bead_b3: 0.0,
+                bead_center_glow: 1.0,
+                bead_saturation_lift: 0.25,
+                bead_highlight_intensity: 0.85,
+                bead_dark_rim_intensity: 2.0,
+                bead_core_span_factor: 1.0,
+                bead_rim_span_factor: 1.0,
+                bead_caustic_light: 1.10,
+                bead_caustic_dark: 0.80,
             }
         } else {
             Self::new()
@@ -168,6 +210,19 @@ impl WindowControlTuning {
                 self.horizontal_power,
             ],
             rim_profile: [self.lateral_power, self.vertical_floor, self.grazing_power],
+            bead: [
+                self.bead_b1,
+                self.bead_b2,
+                self.bead_b3,
+                self.bead_center_glow,
+                self.bead_saturation_lift,
+                self.bead_highlight_intensity,
+                self.bead_dark_rim_intensity,
+                self.bead_core_span_factor,
+                self.bead_rim_span_factor,
+                self.bead_caustic_light,
+                self.bead_caustic_dark,
+            ],
             style: TrafficLightStyleFields {
                 substrate_coverage: self.substrate_coverage,
                 lower_substrate_coverage: self.lower_substrate_coverage,
@@ -218,6 +273,17 @@ impl WindowControlTuning {
             lateral_power: self.lateral_power.clamp(0.25, 16.0),
             vertical_floor: self.vertical_floor.clamp(0.0, 1.0),
             grazing_power: self.grazing_power.clamp(0.1, 4.0),
+            bead_b1: self.bead_b1.clamp(0.0, 2.0),
+            bead_b2: self.bead_b2.clamp(0.0, 2.0),
+            bead_b3: self.bead_b3.clamp(0.0, 1.0),
+            bead_center_glow: self.bead_center_glow.clamp(0.0, 2.0),
+            bead_saturation_lift: self.bead_saturation_lift.clamp(0.0, 0.5),
+            bead_highlight_intensity: self.bead_highlight_intensity.clamp(0.0, 2.0),
+            bead_dark_rim_intensity: self.bead_dark_rim_intensity.clamp(0.0, 3.0),
+            bead_core_span_factor: self.bead_core_span_factor.clamp(0.5, 2.0),
+            bead_rim_span_factor: self.bead_rim_span_factor.clamp(0.5, 2.0),
+            bead_caustic_light: self.bead_caustic_light.clamp(0.0, 2.0),
+            bead_caustic_dark: self.bead_caustic_dark.clamp(0.0, 2.0),
         }
     }
 }
@@ -263,6 +329,9 @@ pub struct TrafficLightMaterialFields {
     pub core_light: [f32; 7],
     /// Rim shaping, in the order lateral power, vertical floor, grazing power.
     pub rim_profile: [f32; 3],
+    /// Reference bead, in the order b1, b2, b3, centre glow, saturation lift,
+    /// highlight, dark rim, core span, rim span, caustic light, caustic dark.
+    pub bead: [f32; 11],
     pub style: TrafficLightStyleFields,
 }
 
@@ -349,6 +418,17 @@ mod tests {
             lateral_power: 0.0,
             vertical_floor: 5.0,
             grazing_power: 9.0,
+            bead_b1: 5.0,
+            bead_b2: -1.0,
+            bead_b3: 5.0,
+            bead_center_glow: 9.0,
+            bead_saturation_lift: 9.0,
+            bead_highlight_intensity: -1.0,
+            bead_dark_rim_intensity: 9.0,
+            bead_core_span_factor: 0.0,
+            bead_rim_span_factor: 9.0,
+            bead_caustic_light: -1.0,
+            bead_caustic_dark: 9.0,
         }
         .clamped();
 
@@ -371,5 +451,16 @@ mod tests {
         assert_eq!(wild.lateral_power, 0.25);
         assert_eq!(wild.vertical_floor, 1.0);
         assert_eq!(wild.grazing_power, 4.0);
+        assert_eq!(wild.bead_b1, 2.0);
+        assert_eq!(wild.bead_b2, 0.0);
+        assert_eq!(wild.bead_b3, 1.0);
+        assert_eq!(wild.bead_center_glow, 2.0);
+        assert_eq!(wild.bead_saturation_lift, 0.5);
+        assert_eq!(wild.bead_highlight_intensity, 0.0);
+        assert_eq!(wild.bead_dark_rim_intensity, 3.0);
+        assert_eq!(wild.bead_core_span_factor, 0.5);
+        assert_eq!(wild.bead_rim_span_factor, 2.0);
+        assert_eq!(wild.bead_caustic_light, 0.0);
+        assert_eq!(wild.bead_caustic_dark, 2.0);
     }
 }

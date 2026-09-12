@@ -5,7 +5,7 @@
 //! spheres and the Iced glyph layer are always driven by the same numbers.
 
 use liquid_glass_scene::{
-    Color, CoreLight, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
+    BeadStyle, Color, CoreLight, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
     GlassVariant, InteractionResponse, Rect, RimProfile, TrafficLightStyle,
 };
 
@@ -51,13 +51,31 @@ pub fn traffic_light_source_color(
 pub fn traffic_light_material(
     color: Color,
     inactive: bool,
+    is_dark: bool,
     tuning: WindowControlTuning,
     focus: f32,
 ) -> GlassMaterial {
     let fields = tuning.material_fields([color.r, color.g, color.b, color.a], inactive, focus);
 
     let mut material = GlassMaterial::regular();
-    material.variant = GlassVariant::TrafficLightPhysical;
+    // The reference appearance is a flat bead, not physical glass: this variant
+    // returns early in the shader, before the backdrop/refraction/Fresnel
+    // composition, so the physical knobs below are inert for it.
+    material.variant = GlassVariant::TrafficLightBead;
+    material.bead = BeadStyle {
+        b1: fields.bead[0],
+        b2: fields.bead[1],
+        b3: fields.bead[2],
+        center_glow: fields.bead[3],
+        saturation_lift: fields.bead[4],
+        highlight_intensity: fields.bead[5],
+        dark_rim_intensity: fields.bead[6],
+        core_span_factor: fields.bead[7],
+        rim_span_factor: fields.bead[8],
+        caustic_light: fields.bead[9],
+        caustic_dark: fields.bead[10],
+        mode_dark: if is_dark { 1.0 } else { 0.0 },
+    };
     material.blur.radius = fields.blur_radius;
     material.traffic_light = TrafficLightStyle {
         substrate_coverage: fields.style.substrate_coverage,
@@ -168,9 +186,8 @@ pub fn push_traffic_light_group(
         // in every state, hover and press alike -- so it scales the centre
         // light rather than the pointer response.
         let glow_share = if index == 0 { 1.0 } else { TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE };
-        let mut material = traffic_light_material(display_color, inactive, tuning, focus);
-        material.core_light.core_lift *= glow_share;
-        material.core_light.axial_glow *= glow_share;
+        let mut material = traffic_light_material(display_color, inactive, is_dark, tuning, focus);
+        material.bead.center_glow *= glow_share;
 
         let mut node = GlassNode::new(id, bounds)
             .shape(GlassShape::Circle)
@@ -265,13 +282,13 @@ mod tests {
     }
 
     #[test]
-    fn traffic_lights_use_the_configured_physical_material() {
+    fn traffic_lights_use_the_reference_bead_material() {
         let tuning = WindowControlTuning::default();
         let traffic =
-            traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), false, tuning, 1.0);
+            traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), false, false, tuning, 1.0);
         let stock = GlassMaterial::regular();
 
-        assert_eq!(traffic.variant, GlassVariant::TrafficLightPhysical);
+        assert_eq!(traffic.variant, GlassVariant::TrafficLightBead);
         assert_eq!(traffic.refraction.thickness, stock.refraction.thickness);
         assert_eq!(traffic.refraction.index, stock.refraction.index);
         assert_eq!(traffic.refraction.strength, tuning.refraction_strength);
@@ -356,12 +373,12 @@ mod tests {
         );
 
         let nodes = scene.nodes();
-        let base = WindowControlTuning::default().core_lift;
+        let base = WindowControlTuning::default().bead_center_glow;
         let expected = base * TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE;
 
-        let red = nodes[0].material.core_light.core_lift;
-        let yellow = nodes[1].material.core_light.core_lift;
-        let green = nodes[2].material.core_light.core_lift;
+        let red = nodes[0].material.bead.center_glow;
+        let yellow = nodes[1].material.bead.center_glow;
+        let green = nodes[2].material.bead.center_glow;
         assert!((red - base).abs() < 1e-6, "red keeps the full glow: {red} vs {base}");
         assert!((yellow - expected).abs() < 1e-6, "yellow: {yellow} vs {expected}");
         assert!((green - expected).abs() < 1e-6, "green: {green} vs {expected}");
