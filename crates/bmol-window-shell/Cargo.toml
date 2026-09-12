@@ -42,8 +42,8 @@ liquid-glass = { package = "bmol-iced", git = "https://github.com/Erizeez/bmol-i
 liquid-rs = { git = "https://github.com/Erizeez/liquid-rs", branch = "main" }
 liquid-glass-render = { git = "https://github.com/Erizeez/liquid-rs", branch = "main" }
 liquid-glass-scene = { git = "https://github.com/Erizeez/liquid-rs", branch = "main" }
-liquid-glass-ui = { git = "https://github.com/Erizeez/bmol-glass-ui", branch = "main" }
-bmol-designs = { git = "https://github.com/Erizeez/bmol-designs", branch = "main" }
+liquid-glass-ui = { git = "https://github.com/Erizeez/bmol-glass-ui", tag = "v0.1.4" }
+bmol-designs = { git = "https://github.com/Erizeez/bmol-designs", tag = "v0.1.6" }
 pollster = "1.0.1"
 macos-typography = { git = "https://github.com/Erizeez/macos-fonts.git", tag = "v0.1.4" }
 spring-rs = { git = "https://github.com/Erizeez/spring-rs.git", tag = "v0.1.0" }

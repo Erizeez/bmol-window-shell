@@ -16,7 +16,7 @@ iced = ["dep:iced"]
 
 [dependencies]
 # Design tokens (diameter, spacing, leading margin, hover slop).
-bmol-designs = { git = "https://github.com/Erizeez/bmol-designs", branch = "main" }
+bmol-designs = { git = "https://github.com/Erizeez/bmol-designs", tag = "v0.1.6" }
 # Renderer-agnostic scene model. The traffic-light *effect* -- the
 # `TrafficLightBead` variant and the WGSL that implements it -- lives in
 # liquid-rs; this crate only tunes and instantiates it.
