@@ -4,7 +4,7 @@ members = [
     "crates/bmol-window-shell",
     "crates/bmol-window-native",
     "crates/bmol-window-platform",
-    "crates/bmol-window-glass",
+    "crates/bmol-window-traffic-lights",
 ]
 
 [workspace.package]
@@ -33,3 +33,4 @@ opt-level = 2
 
 [profile.dev.package."*"]
 opt-level = 2
+

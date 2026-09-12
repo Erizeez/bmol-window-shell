@@ -10,8 +10,8 @@ use std::{
 
 use iced_wgpu::{Engine, Renderer as IcedRenderer, graphics, wgpu};
 use liquid_glass::{
-    Color, GlassAccessibility, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassRole,
-    GlassScene, GlassShape, GlassVariant, GpuRenderer, GpuSize, Rect, TrafficLightStyle,
+    GlassAccessibility, GlassId, GlassInteraction, GlassNode, GlassRole, GlassScene, GpuRenderer,
+    GpuSize, Rect,
     UiColorScheme, UiTheme,
 };
 
@@ -56,31 +56,28 @@ pub const SIDEBAR_SEARCH_HEIGHT: f32 = 28.0;
 /// The search field uses the same 10 pt top, leading, and trailing inset.
 pub const SIDEBAR_SEARCH_TOP: f32 = FUSED_TOP_BAR_HEIGHT + SIDEBAR_SEARCH_TOP_MARGIN;
 
-/// The dedicated window-controls sample uses stable IDs so the scene and the
-/// Iced hit targets share the same interaction state.
-pub const WINDOW_CONTROL_NATIVE_IDS: [GlassId; 3] = [GlassId(100), GlassId(101), GlassId(102)];
-pub const WINDOW_CONTROL_REFERENCE_IDS: [GlassId; 3] = [GlassId(110), GlassId(111), GlassId(112)];
-pub const WINDOW_CONTROL_LARGE_IDS: [GlassId; 3] = [GlassId(120), GlassId(121), GlassId(122)];
-pub const WINDOW_CONTROL_INACTIVE_IDS: [GlassId; 3] = [GlassId(130), GlassId(131), GlassId(132)];
-pub const WINDOW_CONTROL_DISABLED_IDS: [GlassId; 3] = [GlassId(140), GlassId(141), GlassId(142)];
 
-pub const WINDOW_CONTROL_NATIVE_X: f32 = 10.0;
-pub const WINDOW_CONTROL_NATIVE_Y: f32 = 18.0;
-pub const WINDOW_CONTROL_REFERENCE_X: f32 = 240.0;
-pub const WINDOW_CONTROL_REFERENCE_Y: f32 = 196.0;
-pub const WINDOW_CONTROL_LARGE_X: f32 = 240.0;
-pub const WINDOW_CONTROL_LARGE_Y: f32 = 292.0;
-pub const WINDOW_CONTROL_INACTIVE_X: f32 = 240.0;
-pub const WINDOW_CONTROL_INACTIVE_Y: f32 = 418.0;
-pub const WINDOW_CONTROL_DISABLED_X: f32 = 240.0;
-pub const WINDOW_CONTROL_DISABLED_Y: f32 = 544.0;
-/// AppKit's standard traffic-light circle measures 28 px on a 2x display.
-/// Keep the cross-platform sample in logical points so its 1:1 reference is
-/// independent of the backing scale factor.
-pub const WINDOW_CONTROL_NATIVE_SIZE: f32 = bmol_designs::traffic_lights::DIAMETER;
-pub const WINDOW_CONTROL_LARGE_SIZE: f32 = 64.0;
-pub const WINDOW_CONTROL_GAP: f32 = bmol_designs::traffic_lights::SPACING;
-pub const WINDOW_CONTROL_LARGE_GAP: f32 = 12.0;
+// Everything traffic-light -- ids, geometry, palette, material recipe, scene
+// builder, and the interaction store -- is owned by the standalone
+// `bmol-window-traffic-lights` crate. The dependency graph is version-aligned,
+// so there is no adapter layer left here. This module is shared by every
+// example, so any single example only uses a subset.
+#[allow(unused_imports)]
+pub use bmol_window_shell::traffic_lights::{
+    TrafficLightInteraction, WINDOW_CONTROL_DISABLED_IDS, WINDOW_CONTROL_DISABLED_X,
+    WINDOW_CONTROL_DISABLED_Y, WINDOW_CONTROL_GAP, WINDOW_CONTROL_INACTIVE_IDS,
+    WINDOW_CONTROL_INACTIVE_X, WINDOW_CONTROL_INACTIVE_Y, WINDOW_CONTROL_LARGE_GAP,
+    WINDOW_CONTROL_LARGE_IDS, WINDOW_CONTROL_LARGE_SIZE, WINDOW_CONTROL_LARGE_X,
+    WINDOW_CONTROL_LARGE_Y, WINDOW_CONTROL_NATIVE_IDS, WINDOW_CONTROL_NATIVE_SIZE,
+    WINDOW_CONTROL_NATIVE_X, WINDOW_CONTROL_NATIVE_Y, WINDOW_CONTROL_REFERENCE_IDS,
+    WINDOW_CONTROL_REFERENCE_X, WINDOW_CONTROL_REFERENCE_Y, WindowControlTuning,
+    active_window_control_origin, active_window_control_tuning, blend_color, publish_group,
+    publish_groups, push_traffic_light_group, reset_groups, scale_scene, set_window_control_origin,
+    set_window_control_tuning, snapshot, traffic_light_material, traffic_light_source_color,
+    window_control_group_progress,
+    window_control_interaction, window_control_slot_index,
+};
+
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum DemoSurface {
@@ -90,143 +87,13 @@ pub enum DemoSurface {
     WindowDemo,
 }
 
-/// Runtime optical controls for the standalone window-controls laboratory.
-///
-/// The values are copied into the semantic traffic-light material for one
-/// frame, so changing a slider does not alter any other glass role.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WindowControlTuning {
-    pub blur_radius: f32,
-    pub opacity: f32,
-    pub substrate_coverage: f32,
-    pub lower_substrate_coverage: f32,
-    pub lower_tint_coverage: f32,
-    pub angular_light: f32,
-    pub light_angle: f32,
-    pub light_softness: f32,
-    pub body_thickness: f32,
-    pub internal_scattering: f32,
-    pub side_edge_darkness: f32,
-    pub side_edge_width: f32,
-    pub edge_side_bias: f32,
-    pub edge_side_angle: f32,
-    pub refraction_strength: f32,
-    pub fresnel_strength: f32,
-}
-
-impl WindowControlTuning {
-    pub const fn new() -> Self {
-        Self {
-            blur_radius: 17.0,
-            opacity: 1.0,
-            substrate_coverage: 0.88,
-            lower_substrate_coverage: 0.54,
-            lower_tint_coverage: 0.66,
-            angular_light: 0.055,
-            light_angle: 0.52,
-            light_softness: 1.0,
-            body_thickness: 0.79,
-            internal_scattering: 1.0,
-            side_edge_darkness: 4.0,
-            side_edge_width: 1.26,
-            edge_side_bias: 1.0,
-            edge_side_angle: 23.0,
-            refraction_strength: 0.5,
-            fresnel_strength: 0.0,
-        }
-    }
-
-    /// Returns the scheme-specific material preset used by the standalone
-    /// controls laboratory. The dark preset intentionally removes the side
-    /// absorption and refraction response while increasing Fresnel, matching
-    /// the measured dark-mode control treatment.
-    #[allow(dead_code)]
-    #[must_use]
-    pub const fn for_scheme(scheme: UiColorScheme) -> Self {
-        match scheme {
-            UiColorScheme::Light => Self::new(),
-            UiColorScheme::Dark => Self {
-                blur_radius: 17.0,
-                internal_scattering: 1.0,
-                side_edge_darkness: 0.0,
-                side_edge_width: 0.5,
-                opacity: 1.0,
-                substrate_coverage: 0.88,
-                lower_substrate_coverage: 0.54,
-                lower_tint_coverage: 0.66,
-                angular_light: 0.055,
-                light_angle: 0.52,
-                light_softness: 1.0,
-                body_thickness: 0.79,
-                edge_side_bias: 1.0,
-                edge_side_angle: 23.0,
-                refraction_strength: 0.0,
-                fresnel_strength: 0.39,
-            },
-        }
-    }
-
-    #[must_use]
-    fn clamped(self) -> Self {
-        Self {
-            blur_radius: self.blur_radius.clamp(0.0, 80.0),
-            opacity: self.opacity.clamp(0.0, 1.0),
-            substrate_coverage: self.substrate_coverage.clamp(0.0, 1.0),
-            lower_substrate_coverage: self.lower_substrate_coverage.clamp(0.0, 1.0),
-            lower_tint_coverage: self.lower_tint_coverage.clamp(0.0, 1.0),
-            angular_light: self.angular_light.clamp(0.0, 2.0),
-            light_angle: self.light_angle.clamp(0.0, 1.0),
-            light_softness: self.light_softness.clamp(0.0, 1.0),
-            body_thickness: self.body_thickness.clamp(0.25, 3.0),
-            internal_scattering: self.internal_scattering.clamp(0.0, 1.0),
-            side_edge_darkness: self.side_edge_darkness.clamp(0.0, 4.0),
-            side_edge_width: self.side_edge_width.clamp(0.25, 4.0),
-            edge_side_bias: self.edge_side_bias.clamp(0.0, 1.0),
-            edge_side_angle: self.edge_side_angle.clamp(10.0, 80.0),
-            refraction_strength: self.refraction_strength.clamp(0.0, 1.0),
-            fresnel_strength: self.fresnel_strength.clamp(0.0, 1.0),
-        }
-    }
-}
-
-impl Default for WindowControlTuning {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 static ACTIVE_COLOR_SCHEME: AtomicU8 = AtomicU8::new(1);
 static ACTIVE_ACCESSIBILITY: AtomicU8 = AtomicU8::new(0);
 static ACTIVE_SURFACE: AtomicU8 = AtomicU8::new(0);
-// The outer group hit area is intentionally larger than each circle. Keep its
-// hover target beside the renderer so the three visual nodes and the Iced
-// glyph layer share one state machine, including the gaps between circles.
-static ACTIVE_WINDOW_CONTROL_HOVER: AtomicU8 = AtomicU8::new(0);
-// The Iced layer advances this shared value on its animation tick. The
-// compositor consumes the same value for the material transition, avoiding a
-// separate renderer clock that could make the glyph and colour drift by a few
-// frames.
-static ACTIVE_WINDOW_CONTROL_PROGRESS: Mutex<[f32; 5]> = Mutex::new([0.0; 5]);
-static ACTIVE_WINDOW_CONTROL_PRESS_PROGRESS: Mutex<[f32; 15]> = Mutex::new([0.0; 15]);
-static ACTIVE_WINDOW_CONTROL_SCALE: Mutex<[f32; 15]> = Mutex::new([1.0; 15]);
-static ACTIVE_WINDOW_CONTROL_TUNING: Mutex<WindowControlTuning> =
-    Mutex::new(WindowControlTuning::for_scheme(UiColorScheme::Dark));
-static ACTIVE_WINDOW_CONTROL_ORIGIN: Mutex<(f32, f32)> =
-    Mutex::new((WINDOW_CONTROL_NATIVE_X, WINDOW_CONTROL_NATIVE_Y));
 static ACTIVE_WINDOW_INACTIVE: AtomicBool = AtomicBool::new(false);
 
-#[allow(dead_code)]
-pub fn set_window_control_origin(x: f32, y: f32) {
-    if let Ok(mut origin) = ACTIVE_WINDOW_CONTROL_ORIGIN.lock() {
-        *origin = (x, y);
-    }
-}
 
-pub fn active_window_control_origin() -> (f32, f32) {
-    ACTIVE_WINDOW_CONTROL_ORIGIN
-        .lock()
-        .map_or((WINDOW_CONTROL_NATIVE_X, WINDOW_CONTROL_NATIVE_Y), |val| *val)
-}
 
 #[allow(dead_code)]
 pub fn set_window_inactive(inactive: bool) {
@@ -245,7 +112,7 @@ pub fn set_color_scheme(scheme: UiColorScheme) {
         },
         Ordering::Relaxed,
     );
-    set_window_control_tuning(WindowControlTuning::for_scheme(scheme));
+    set_window_control_tuning(WindowControlTuning::for_scheme(scheme == UiColorScheme::Dark));
 }
 
 fn active_color_scheme() -> UiColorScheme {
@@ -269,18 +136,6 @@ pub fn set_accessibility(accessibility: GlassAccessibility) {
     ACTIVE_ACCESSIBILITY.store(value, Ordering::Relaxed);
 }
 
-#[allow(dead_code)]
-pub fn set_window_control_tuning(tuning: WindowControlTuning) {
-    if let Ok(mut active) = ACTIVE_WINDOW_CONTROL_TUNING.lock() {
-        *active = tuning.clamped();
-    }
-}
-
-fn active_window_control_tuning() -> WindowControlTuning {
-    ACTIVE_WINDOW_CONTROL_TUNING
-        .lock()
-        .map_or_else(|poisoned| *poisoned.into_inner(), |active| *active)
-}
 
 #[allow(dead_code)]
 pub fn set_surface(surface: DemoSurface) {
@@ -294,51 +149,6 @@ pub fn set_surface(surface: DemoSurface) {
     );
 }
 
-#[allow(dead_code)]
-pub fn set_window_control_group_hover(group_index: usize, hovered: bool) {
-    if group_index >= u8::BITS as usize {
-        return;
-    }
-    let bit = 1_u8 << group_index;
-    if hovered {
-        ACTIVE_WINDOW_CONTROL_HOVER.fetch_or(bit, Ordering::Relaxed);
-    } else {
-        ACTIVE_WINDOW_CONTROL_HOVER.fetch_and(!bit, Ordering::Relaxed);
-    }
-}
-
-#[allow(dead_code)]
-pub fn set_window_control_group_progress(group_index: usize, progress: f32) {
-    if let Ok(mut values) = ACTIVE_WINDOW_CONTROL_PROGRESS.lock()
-        && let Some(value) = values.get_mut(group_index)
-    {
-        *value = progress.clamp(0.0, 1.0);
-    }
-}
-
-#[allow(dead_code)]
-pub fn set_window_control_press_progress(id: GlassId, progress: f32) {
-    let Some(index) = window_control_slot_index(id) else {
-        return;
-    };
-    if let Ok(mut values) = ACTIVE_WINDOW_CONTROL_PRESS_PROGRESS.lock()
-        && let Some(value) = values.get_mut(index)
-    {
-        *value = progress.clamp(0.0, 1.0);
-    }
-}
-
-#[allow(dead_code)]
-pub fn set_window_control_scale(id: GlassId, scale: f32) {
-    let Some(index) = window_control_slot_index(id) else {
-        return;
-    };
-    if let Ok(mut values) = ACTIVE_WINDOW_CONTROL_SCALE.lock()
-        && let Some(value) = values.get_mut(index)
-    {
-        *value = scale.clamp(0.85, 1.30);
-    }
-}
 
 fn active_surface() -> DemoSurface {
     match ACTIVE_SURFACE.load(Ordering::Relaxed) {
@@ -377,7 +187,6 @@ enum RenderLayer {
 struct AnimatedInteraction {
     current: GlassInteraction,
     target: GlassInteraction,
-    last_updated: Instant,
 }
 
 impl fmt::Debug for Renderer {
@@ -405,52 +214,19 @@ impl Renderer {
             return GlassInteraction::inactive();
         };
 
-        let now = Instant::now();
-        let delta = now.saturating_duration_since(interaction.last_updated).as_secs_f32().min(0.1);
-        interaction.last_updated = now;
-        let group_hover = window_control_group_hover_target(id);
-        let target_hover = interaction.target.hover.max(group_hover);
-        let hover_time_constant = if target_hover >= interaction.current.hover {
-            INTERACTION_ENTER_ANIMATION_TIME_CONSTANT
-        } else {
-            INTERACTION_EXIT_ANIMATION_TIME_CONSTANT
-        };
-        let hover_step = 1.0 - (-delta / hover_time_constant).exp();
-        let press_step = 1.0
-            - (-delta
-                / if interaction.target.press >= interaction.current.press {
-                    INTERACTION_ENTER_ANIMATION_TIME_CONSTANT
-                } else {
-                    INTERACTION_EXIT_ANIMATION_TIME_CONSTANT
-                })
-            .exp();
-        let focus_step = 1.0
-            - (-delta
-                / if interaction.target.focus >= interaction.current.focus {
-                    INTERACTION_ENTER_ANIMATION_TIME_CONSTANT
-                } else {
-                    INTERACTION_EXIT_ANIMATION_TIME_CONSTANT
-                })
-            .exp();
-        interaction.current.hover = approach(interaction.current.hover, target_hover, hover_step);
-        interaction.current.press =
-            approach(interaction.current.press, interaction.target.press, press_step);
-        interaction.current.focus =
-            approach(interaction.current.focus, interaction.target.focus, focus_step);
+        // Traffic-light hover/press are owned by the shell state machine and
+        // published once per tick. The compositor must not smooth them a second
+        // time, or the material and the glyph layer would diverge.
+        if window_control_slot_index(id).is_some() {
+            let values = window_control_interaction(id);
+            interaction.current.hover = values.hover;
+            interaction.target.hover = values.hover;
+            interaction.current.press = values.press;
+            interaction.target.press = values.press;
+        }
         interaction.current.pointer = interaction.target.pointer;
         interaction.current.spring = interaction.target.spring;
         interaction.current.parallax = interaction.target.parallax;
-        if let Some(progress) = window_control_group_progress(id) {
-            interaction.current.hover = progress;
-        }
-        if let Some(progress) = window_control_press_progress(id) {
-            // The custom GlassButton is rebuilt by Iced after each message,
-            // so its local pressed flag is only authoritative for the input
-            // event itself. The demo-level press animation is the durable
-            // source of truth for the material while it fades out.
-            interaction.current.press = progress;
-            interaction.target.press = progress;
-        }
         interaction.current
     }
 
@@ -469,69 +245,6 @@ impl Renderer {
             RenderLayer::Source => {}
         }
         &mut self.inner
-    }
-}
-
-fn window_control_group_hover_target(id: GlassId) -> f32 {
-    let Some(group_index) = window_control_group_index(id) else {
-        return 0.0;
-    };
-    let bit = 1_u8 << group_index;
-    if ACTIVE_WINDOW_CONTROL_HOVER.load(Ordering::Relaxed) & bit != 0 { 1.0 } else { 0.0 }
-}
-
-fn window_control_group_progress(id: GlassId) -> Option<f32> {
-    let group_index = window_control_group_index(id)?;
-    ACTIVE_WINDOW_CONTROL_PROGRESS.lock().ok().and_then(|values| values.get(group_index).copied())
-}
-
-fn window_control_press_progress(id: GlassId) -> Option<f32> {
-    let index = window_control_slot_index(id)?;
-    ACTIVE_WINDOW_CONTROL_PRESS_PROGRESS.lock().ok().and_then(|values| values.get(index).copied())
-}
-
-fn window_control_scale(id: GlassId) -> f32 {
-    let Some(index) = window_control_slot_index(id) else {
-        return 1.0;
-    };
-    ACTIVE_WINDOW_CONTROL_SCALE
-        .lock()
-        .ok()
-        .and_then(|values| values.get(index).copied())
-        .unwrap_or(1.0)
-}
-
-fn window_control_slot_index(id: GlassId) -> Option<usize> {
-    let group = window_control_group_index(id)?;
-    let within_group = if let Some(index) =
-        WINDOW_CONTROL_NATIVE_IDS.iter().position(|item| *item == id)
-    {
-        index
-    } else if let Some(index) = WINDOW_CONTROL_REFERENCE_IDS.iter().position(|item| *item == id) {
-        index
-    } else if let Some(index) = WINDOW_CONTROL_LARGE_IDS.iter().position(|item| *item == id) {
-        index
-    } else if let Some(index) = WINDOW_CONTROL_INACTIVE_IDS.iter().position(|item| *item == id) {
-        index
-    } else {
-        WINDOW_CONTROL_DISABLED_IDS.iter().position(|item| *item == id)?
-    };
-    Some(group * 3 + within_group)
-}
-
-fn window_control_group_index(id: GlassId) -> Option<usize> {
-    if WINDOW_CONTROL_NATIVE_IDS.contains(&id) {
-        Some(0)
-    } else if WINDOW_CONTROL_REFERENCE_IDS.contains(&id) {
-        Some(1)
-    } else if WINDOW_CONTROL_LARGE_IDS.contains(&id) {
-        Some(2)
-    } else if WINDOW_CONTROL_INACTIVE_IDS.contains(&id) {
-        Some(3)
-    } else if WINDOW_CONTROL_DISABLED_IDS.contains(&id) {
-        Some(4)
-    } else {
-        None
     }
 }
 
@@ -554,13 +267,12 @@ impl liquid_glass::GlassForegroundRenderer for Renderer {
 
     fn update_glass_interaction(&self, id: GlassId, interaction: GlassInteraction) {
         if let Ok(mut interactions) = self.interactions.lock() {
-            let now = Instant::now();
+            // Traffic-light hover/press/scale come from the shell state machine,
+            // so this map only carries compositor-side extras. There is no
+            // renderer-side clock left to keep, which is exactly the point:
+            // one animator, one source of truth.
             interactions.entry(id).and_modify(|animated| animated.target = interaction).or_insert(
-                AnimatedInteraction {
-                    current: interaction,
-                    target: interaction,
-                    last_updated: now,
-                },
+                AnimatedInteraction { current: interaction, target: interaction },
             );
         }
     }
@@ -1578,71 +1290,69 @@ fn window_controls_scene(
             .material(theme.glass_material(GlassRole::Toolbar));
     toolbar.z_index = 10;
     scene.push(toolbar);
-    push_traffic_light_group(
-        &mut scene,
-        &WINDOW_CONTROL_NATIVE_IDS,
-        WINDOW_CONTROL_NATIVE_X,
-        WINDOW_CONTROL_NATIVE_Y,
-        WINDOW_CONTROL_NATIVE_SIZE,
-        WINDOW_CONTROL_GAP,
-        false,
-        false,
-        color_scheme,
-        tuning,
-        &interactions,
-    );
-    push_traffic_light_group(
-        &mut scene,
-        &WINDOW_CONTROL_REFERENCE_IDS,
-        WINDOW_CONTROL_REFERENCE_X,
-        WINDOW_CONTROL_REFERENCE_Y,
-        WINDOW_CONTROL_NATIVE_SIZE,
-        WINDOW_CONTROL_GAP,
-        false,
-        false,
-        color_scheme,
-        tuning,
-        &interactions,
-    );
-    push_traffic_light_group(
-        &mut scene,
-        &WINDOW_CONTROL_LARGE_IDS,
-        WINDOW_CONTROL_LARGE_X,
-        WINDOW_CONTROL_LARGE_Y,
-        WINDOW_CONTROL_LARGE_SIZE,
-        WINDOW_CONTROL_LARGE_GAP,
-        false,
-        false,
-        color_scheme,
-        tuning,
-        &interactions,
-    );
-    push_traffic_light_group(
-        &mut scene,
-        &WINDOW_CONTROL_INACTIVE_IDS,
-        WINDOW_CONTROL_INACTIVE_X,
-        WINDOW_CONTROL_INACTIVE_Y,
-        WINDOW_CONTROL_LARGE_SIZE,
-        WINDOW_CONTROL_LARGE_GAP,
-        true,
-        false,
-        color_scheme,
-        tuning,
-        &interactions,
-    );
-    push_traffic_light_group(
-        &mut scene,
-        &WINDOW_CONTROL_DISABLED_IDS,
-        WINDOW_CONTROL_DISABLED_X,
-        WINDOW_CONTROL_DISABLED_Y,
-        WINDOW_CONTROL_LARGE_SIZE,
-        WINDOW_CONTROL_LARGE_GAP,
-        false,
-        true,
-        color_scheme,
-        tuning,
-        &interactions,
-    );
+    let is_dark = color_scheme == UiColorScheme::Dark;
+    let groups = [
+        (
+            WINDOW_CONTROL_NATIVE_IDS,
+            WINDOW_CONTROL_NATIVE_X,
+            WINDOW_CONTROL_NATIVE_Y,
+            WINDOW_CONTROL_NATIVE_SIZE,
+            WINDOW_CONTROL_GAP,
+            false,
+            false,
+        ),
+        (
+            WINDOW_CONTROL_REFERENCE_IDS,
+            WINDOW_CONTROL_REFERENCE_X,
+            WINDOW_CONTROL_REFERENCE_Y,
+            WINDOW_CONTROL_NATIVE_SIZE,
+            WINDOW_CONTROL_GAP,
+            false,
+            false,
+        ),
+        (
+            WINDOW_CONTROL_LARGE_IDS,
+            WINDOW_CONTROL_LARGE_X,
+            WINDOW_CONTROL_LARGE_Y,
+            WINDOW_CONTROL_LARGE_SIZE,
+            WINDOW_CONTROL_LARGE_GAP,
+            false,
+            false,
+        ),
+        (
+            WINDOW_CONTROL_INACTIVE_IDS,
+            WINDOW_CONTROL_INACTIVE_X,
+            WINDOW_CONTROL_INACTIVE_Y,
+            WINDOW_CONTROL_LARGE_SIZE,
+            WINDOW_CONTROL_LARGE_GAP,
+            true,
+            false,
+        ),
+        (
+            WINDOW_CONTROL_DISABLED_IDS,
+            WINDOW_CONTROL_DISABLED_X,
+            WINDOW_CONTROL_DISABLED_Y,
+            WINDOW_CONTROL_LARGE_SIZE,
+            WINDOW_CONTROL_LARGE_GAP,
+            false,
+            true,
+        ),
+    ];
+    for (ids, x, y, group_size, gap, inactive, close_disabled) in groups {
+        push_traffic_light_group(
+            &mut scene,
+            &ids,
+            x,
+            y,
+            group_size,
+            gap,
+            inactive,
+            close_disabled,
+            is_dark,
+            tuning,
+            &interactions,
+        );
+    }
     scale_scene(&mut scene, scale_factor);
     scene
 }
@@ -1659,9 +1369,9 @@ fn window_demo_scene(
     let (origin_x, origin_y) = active_window_control_origin();
     let inactive = is_window_inactive();
     let effective_tuning = if color_scheme == UiColorScheme::Dark
-        && tuning == WindowControlTuning::for_scheme(UiColorScheme::Light)
+        && tuning == WindowControlTuning::for_scheme(false)
     {
-        WindowControlTuning::for_scheme(UiColorScheme::Dark)
+        WindowControlTuning::for_scheme(true)
     } else {
         tuning
     };
@@ -1674,7 +1384,7 @@ fn window_demo_scene(
         WINDOW_CONTROL_GAP,
         inactive,
         false,
-        color_scheme,
+        color_scheme == UiColorScheme::Dark,
         effective_tuning,
         &interactions,
     );
@@ -1682,141 +1392,6 @@ fn window_demo_scene(
     scene
 }
 
-fn push_traffic_light_group(
-    scene: &mut GlassScene,
-    ids: &[GlassId; 3],
-    x: f32,
-    y: f32,
-    size: f32,
-    gap: f32,
-    inactive: bool,
-    close_disabled: bool,
-    color_scheme: UiColorScheme,
-    tuning: WindowControlTuning,
-    interactions: &[(GlassId, GlassInteraction)],
-) {
-    for (index, id) in ids.iter().copied().enumerate() {
-        let base_x = x + index as f32 * (size + gap);
-        let scale = window_control_scale(id);
-        let visual_size = size * scale;
-        let inset = (size - visual_size) * 0.5;
-        let bounds = Rect::new(base_x + inset, y + inset, visual_size, visual_size);
-        let interaction = interactions
-            .iter()
-            .find(|(interaction_id, _)| *interaction_id == id)
-            .map_or_else(GlassInteraction::inactive, |(_, interaction)| *interaction);
-        let focus = if inactive {
-            window_control_group_progress(id).unwrap_or_else(|| interaction.hover.clamp(0.0, 1.0))
-        } else {
-            1.0
-        };
-        let base_color =
-            traffic_light_color_for_scheme(index, inactive, close_disabled, color_scheme);
-        let active_color =
-            traffic_light_color_for_scheme(index, false, close_disabled, color_scheme);
-        let display_color =
-            if inactive { blend_color(base_color, active_color, focus) } else { base_color };
-        let mut node = GlassNode::new(id, bounds)
-            .shape(GlassShape::Circle)
-            .material(traffic_light_material(
-                display_color,
-                visual_size,
-                inactive,
-                close_disabled,
-                color_scheme,
-                tuning,
-                focus,
-            ))
-            .interaction(interaction);
-        node.z_index = 40;
-        scene.push(node);
-    }
-}
-
-fn blend_color(from: Color, to: Color, amount: f32) -> Color {
-    let amount = amount.clamp(0.0, 1.0);
-    Color::rgba(
-        from.r + (to.r - from.r) * amount,
-        from.g + (to.g - from.g) * amount,
-        from.b + (to.b - from.b) * amount,
-        from.a + (to.a - from.a) * amount,
-    )
-}
-
-#[allow(dead_code)]
-fn traffic_light_color(index: usize, inactive: bool, close_disabled: bool) -> Color {
-    traffic_light_color_for_scheme(index, inactive, close_disabled, active_color_scheme())
-}
-
-fn traffic_light_color_for_scheme(
-    index: usize,
-    inactive: bool,
-    _close_disabled: bool,
-    scheme: UiColorScheme,
-) -> Color {
-    if inactive {
-        // AppKit removes the chromatic traffic-light pigments when the window
-        // loses focus. Under dark mode, the graphite substrate is significantly
-        // darker (0.32, 0.32, 0.35) than the light mode cool gray (0.78, 0.79, 0.82).
-        return match scheme {
-            UiColorScheme::Dark => Color::rgba(0.32, 0.32, 0.35, 0.96),
-            UiColorScheme::Light => Color::rgba(0.78, 0.79, 0.82, 0.96),
-        };
-    }
-    let (red, green, blue) = match index {
-        // These are deliberately saturated source colours. The glass body
-        // contributes a neutral titlebar substrate and transmission, so a
-        // palette matched only to the displayed centre samples would look
-        // washed out after composition.
-        0 => (1.00, 0.34, 0.28),
-        1 => (1.00, 0.72, 0.05),
-        _ => (0.18, 0.84, 0.10),
-    };
-    Color::rgba(red, green, blue, 0.96)
-}
-
-fn traffic_light_material(
-    color: Color,
-    _size: f32,
-    inactive: bool,
-    _close_disabled: bool,
-    _color_scheme: UiColorScheme,
-    tuning: WindowControlTuning,
-    focus: f32,
-) -> GlassMaterial {
-    let focus = focus.clamp(0.0, 1.0);
-    let muted_alpha = if inactive { 0.84 + 0.16 * focus } else { 1.0 };
-    let muted_opacity = if inactive { 0.94 + 0.06 * focus } else { 1.0 };
-    // Experimental baseline: the control is an exact circular SDF using the
-    // stock physical glass material. Do not add a traffic-light-specific
-    // border, light, glare, shadow, or size compensation here; the sphere's
-    // refraction and Fresnel response must establish the edge by themselves.
-    let mut material = GlassMaterial::regular();
-    material.variant = GlassVariant::TrafficLightPhysical;
-    material.blur.radius = tuning.blur_radius;
-    material.traffic_light = TrafficLightStyle {
-        substrate_coverage: tuning.substrate_coverage,
-        lower_substrate_coverage: tuning.lower_substrate_coverage,
-        lower_tint_coverage: tuning.lower_tint_coverage,
-        angular_light: tuning.angular_light,
-        light_angle: tuning.light_angle,
-        light_softness: tuning.light_softness,
-        body_thickness: tuning.body_thickness,
-        internal_scattering: tuning.internal_scattering,
-        side_edge_darkness: tuning.side_edge_darkness,
-        side_edge_width: tuning.side_edge_width,
-        edge_side_bias: tuning.edge_side_bias,
-        edge_side_angle: tuning.edge_side_angle,
-    };
-    material.tint = Color::rgba(color.r, color.g, color.b, muted_alpha);
-    material.refraction.strength = tuning.refraction_strength;
-    material.fresnel.strength = tuning.fresnel_strength;
-    material.whiteness = 0.0;
-    material.opacity = tuning.opacity * muted_opacity;
-    material
-}
-
-#[allow(clippy::cast_precision_loss)]
 fn navigation_scene_for_viewport(
     scale_factor: f32,
     color_scheme: UiColorScheme,
@@ -1868,31 +1443,11 @@ fn search_scene_for_viewport(
     scene
 }
 
-fn scale_scene(scene: &mut GlassScene, scale_factor: f32) {
-    for node in scene.nodes_mut() {
-        node.bounds.x *= scale_factor;
-        node.bounds.y *= scale_factor;
-        node.bounds.width *= scale_factor;
-        node.bounds.height *= scale_factor;
-        for fused_shape in &mut node.fused_shapes {
-            fused_shape.bounds.x *= scale_factor;
-            fused_shape.bounds.y *= scale_factor;
-            fused_shape.bounds.width *= scale_factor;
-            fused_shape.bounds.height *= scale_factor;
-        }
-        node.backdrop.bounds = node.visual_bounds();
-        node.backdrop.padding *= scale_factor;
-        node.backdrop.blur_radius *= scale_factor;
-        node.material.blur.radius *= scale_factor;
-        node.material.shadow.expand *= scale_factor;
-        node.material.shadow.offset[0] *= scale_factor;
-        node.material.shadow.offset[1] *= scale_factor;
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use liquid_glass::{Color, GlassMaterial, GlassVariant};
 
     #[test]
     fn fused_top_bar_uses_the_measured_height() {
@@ -1914,9 +1469,11 @@ mod tests {
 
     #[test]
     fn inactive_traffic_lights_share_a_neutral_substrate() {
-        let red = traffic_light_color(0, true, false);
-        let yellow = traffic_light_color(1, true, false);
-        let green = traffic_light_color(2, true, false);
+        // The palette is the crate's; this only asserts the compositor consumes
+        // the same neutral inactive substrate it always has.
+        let red = traffic_light_source_color(0, true, false, 0.0);
+        let yellow = traffic_light_source_color(1, true, false, 0.0);
+        let green = traffic_light_source_color(2, true, false, 0.0);
 
         assert_eq!(red.r, yellow.r);
         assert_eq!(yellow.r, green.r);
@@ -1929,26 +1486,21 @@ mod tests {
 
     #[test]
     fn inactive_traffic_lights_distinguish_light_and_dark_schemes() {
-        let light = traffic_light_color_for_scheme(0, true, false, UiColorScheme::Light);
-        let dark = traffic_light_color_for_scheme(0, true, false, UiColorScheme::Dark);
+        let light = traffic_light_source_color(0, true, false, 0.0);
+        let dark = traffic_light_source_color(0, true, true, 0.0);
 
-        assert_eq!(light, Color::rgba(0.78, 0.79, 0.82, 0.96));
-        assert_eq!(dark, Color::rgba(0.32, 0.32, 0.35, 0.96));
+        assert_eq!(light, liquid_glass::Color::rgba(0.78, 0.79, 0.82, 0.96));
+        assert_eq!(dark, liquid_glass::Color::rgba(0.32, 0.32, 0.35, 0.96));
         assert!(light.r > dark.r);
     }
 
     #[test]
     fn traffic_lights_use_the_configured_physical_material() {
+        // The material recipe is the crate's; this asserts the compositor
+        // receives the stock physical response with the tuned knobs applied.
         let tuning = WindowControlTuning::default();
-        let traffic = traffic_light_material(
-            Color::rgba(1.0, 0.37, 0.34, 0.96),
-            WINDOW_CONTROL_NATIVE_SIZE,
-            false,
-            false,
-            UiColorScheme::Light,
-            tuning,
-            1.0,
-        );
+        let traffic =
+            traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), false, tuning, 1.0);
         let stock = GlassMaterial::regular();
 
         assert_eq!(traffic.variant, GlassVariant::TrafficLightPhysical);
@@ -1961,23 +1513,19 @@ mod tests {
         assert_eq!(traffic.glare, stock.glare);
         assert_eq!(traffic.shadow, stock.shadow);
         assert_eq!(traffic.adaptive, stock.adaptive);
+        assert_eq!(traffic.opacity, tuning.opacity);
+        assert_eq!(traffic.blur.radius, tuning.blur_radius);
 
-        let large = traffic_light_material(
-            Color::rgba(1.0, 0.37, 0.34, 0.96),
-            WINDOW_CONTROL_LARGE_SIZE,
-            false,
-            false,
-            UiColorScheme::Light,
-            tuning,
-            1.0,
-        );
-        assert_eq!(large.refraction.strength, tuning.refraction_strength);
-        assert_eq!(large.fresnel.strength, tuning.fresnel_strength);
+        // The inactive treatment mutes the tint and the opacity.
+        let inactive =
+            traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), true, tuning, 0.0);
+        assert!(inactive.tint.a < traffic.tint.a);
+        assert!(inactive.opacity < traffic.opacity);
     }
 
     #[test]
     fn dark_window_controls_use_the_dark_material_preset() {
-        let tuning = WindowControlTuning::for_scheme(UiColorScheme::Dark);
+        let tuning = WindowControlTuning::for_scheme(true);
 
         assert_eq!(tuning.blur_radius, 17.0);
         assert_eq!(tuning.internal_scattering, 1.0);

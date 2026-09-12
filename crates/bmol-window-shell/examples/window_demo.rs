@@ -23,7 +23,7 @@ use liquid_glass::UiColorScheme;
 #[path = "playground/iced_backend.rs"]
 mod iced_backend;
 
-use iced_backend::{DemoSurface, Renderer, WINDOW_CONTROL_NATIVE_IDS, WindowControlTuning};
+use iced_backend::{DemoSurface, Renderer, WindowControlTuning};
 use bmol_window_shell::traffic_lights as window_controls;
 use window_controls::{
     ControlAction, TrafficLightsState, WINDOW_CONTROL_NATIVE_SIZE,
@@ -73,10 +73,7 @@ enum Message {
     ToggleMaximize,
     DragWindow,
     WindowControl(ControlAction),
-    TrafficLightsHover(bool),
-    TrafficLightsPressStart(usize),
-    TrafficLightsPressCancel(usize),
-    TrafficLightsPressEnd(usize),
+    TrafficLights(window_controls::TrafficLightsEvent),
     AnimationFrame(std::time::Instant),
     WindowFocused(bool),
 }
@@ -200,7 +197,7 @@ impl DemoState {
             UiColorScheme::Light
         };
         iced_backend::set_color_scheme(scheme);
-        iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme));
+        iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme == UiColorScheme::Dark));
         iced_backend::set_window_inactive(!self.window_focused);
 
         let rim_insets = self.metrics.rim_insets.top;
@@ -246,14 +243,10 @@ fn boot() -> (DemoState, Task<Message>) {
         UiColorScheme::Light
     };
     iced_backend::set_color_scheme(scheme);
-    iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme));
+    iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme == UiColorScheme::Dark));
     iced_backend::set_accessibility(liquid_glass::GlassAccessibility::none());
     iced_backend::set_window_inactive(!state.window_focused);
-    iced_backend::set_window_control_group_progress(0, 0.0);
-    for id in WINDOW_CONTROL_NATIVE_IDS {
-        iced_backend::set_window_control_press_progress(id, 0.0);
-        iced_backend::set_window_control_scale(id, 1.0);
-    }
+    iced_backend::reset_groups();
     state.sync_window_controls_backend();
 
     (
@@ -400,44 +393,28 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
                 Task::none()
             }
         }
-        Message::TrafficLightsHover(hovered) => {
-            state.traffic_lights.on_group_hover(hovered);
-            iced_backend::set_window_control_group_hover(0, hovered);
-            Task::none()
-        }
-        Message::TrafficLightsPressStart(index) => {
-            state.traffic_lights.on_press_start(index);
-            if let Some(&id) = WINDOW_CONTROL_NATIVE_IDS.get(index) {
-                iced_backend::set_window_control_press_progress(id, 1.0);
+        Message::TrafficLights(event) => {
+            // One event in, one optional window action out: the state machine
+            // owns every hover/press/scale value, the compositor only reads it.
+            let action = state.traffic_lights.handle_event(event);
+            iced_backend::publish_group(0, &state.traffic_lights);
+            match action {
+                Some(action) if state.window_id.is_some() => {
+                    let id = state.window_id.expect("checked above");
+                    match action {
+                        ControlAction::Close => window::close(id),
+                        ControlAction::Minimize => window::minimize(id, true),
+                        ControlAction::Expand | ControlAction::Zoom => {
+                            window::toggle_maximize(id)
+                        }
+                    }
+                }
+                _ => Task::none(),
             }
-            Task::none()
-        }
-        Message::TrafficLightsPressCancel(index) => {
-            state.traffic_lights.on_press_cancel(index);
-            if let Some(&id) = WINDOW_CONTROL_NATIVE_IDS.get(index) {
-                iced_backend::set_window_control_press_progress(id, 0.0);
-                iced_backend::set_window_control_scale(id, 1.0);
-            }
-            Task::none()
-        }
-        Message::TrafficLightsPressEnd(index) => {
-            state.traffic_lights.on_press_end(index);
-            if let Some(&id) = WINDOW_CONTROL_NATIVE_IDS.get(index) {
-                iced_backend::set_window_control_press_progress(id, 0.0);
-            }
-            Task::none()
         }
         Message::AnimationFrame(now) => {
             state.traffic_lights.step(now);
-            iced_backend::set_window_control_group_progress(0, state.traffic_lights.hover_progress);
-            for (index, &id) in WINDOW_CONTROL_NATIVE_IDS.iter().enumerate() {
-                let scale = state.traffic_lights.press_springs[index].value();
-                iced_backend::set_window_control_scale(id, scale);
-                iced_backend::set_window_control_press_progress(
-                    id,
-                    state.traffic_lights.press_targets[index],
-                );
-            }
+            iced_backend::publish_group(0, &state.traffic_lights);
             Task::none()
         }
         Message::WindowFocused(focused) => {
@@ -505,23 +482,7 @@ fn view_traffic_lights<'a>(state: &'a DemoState) -> AppElement<'a> {
         &state.traffic_lights,
         state.window_focused,
         state.is_dark(),
-        |event| match event {
-            window_controls::TrafficLightsEvent::GroupHover(hovered) => {
-                Message::TrafficLightsHover(hovered)
-            }
-            window_controls::TrafficLightsEvent::PressStart(index) => {
-                Message::TrafficLightsPressStart(index)
-            }
-            window_controls::TrafficLightsEvent::PressCancel(index) => {
-                Message::TrafficLightsPressCancel(index)
-            }
-            window_controls::TrafficLightsEvent::PressEnd(index) => {
-                Message::TrafficLightsPressEnd(index)
-            }
-            window_controls::TrafficLightsEvent::Action(action) => {
-                Message::WindowControl(action)
-            }
-        },
+        Message::TrafficLights,
     )
 }
 

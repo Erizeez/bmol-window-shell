@@ -387,7 +387,7 @@ impl WindowShellController {
     /// Builds the pre-fabricated traffic lights widget bound to this window's theme and focus state.
     pub fn traffic_lights_view<'a, Message: Clone + 'a, Theme, Renderer>(
         &'a self,
-        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message,
+        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message + 'a,
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog + iced::widget::svg::Catalog,
@@ -417,7 +417,7 @@ impl WindowShellController {
     /// of laying it out inside a header row.
     pub fn traffic_lights_overlay<'a, Message: Clone + 'a, Theme, Renderer>(
         &'a self,
-        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message,
+        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message + 'a,
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog + iced::widget::svg::Catalog,
@@ -427,7 +427,7 @@ impl WindowShellController {
             From<iced::widget::svg::StyleFn<'a, Theme>>,
         Renderer: iced::advanced::Renderer + iced::advanced::svg::Renderer + 'a,
     {
-        let (origin_x, origin_y) = bmol_window_glass::active_window_control_origin();
+        let (origin_x, origin_y) = super::traffic_lights::active_window_control_origin();
         super::traffic_lights::positioned_control_group(
             super::traffic_lights::view_traffic_lights_all_inclusive(
                 &self.traffic_lights,
@@ -445,7 +445,7 @@ impl WindowShellController {
     pub fn traffic_lights_view_with_state<'a, Message: Clone + 'a, Theme, Renderer>(
         &self,
         state: &'a super::traffic_lights::TrafficLightsState,
-        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message,
+        on_event: impl Fn(super::traffic_lights::TrafficLightsEvent) -> Message + 'a,
     ) -> Element<'a, Message, Theme, Renderer>
     where
         Theme: 'a + iced::widget::container::Catalog + iced::widget::svg::Catalog,

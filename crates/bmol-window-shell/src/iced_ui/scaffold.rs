@@ -9,7 +9,7 @@ use iced::widget::{column, container, row, space, text};
 use iced::{Alignment, Color, Element, Length, Padding, window};
 
 use super::controller::WindowShellController;
-use super::traffic_lights::{TrafficLightsEvent, WindowControlAction};
+use super::traffic_lights::TrafficLightsEvent;
 use crate::platform::window_metrics;
 
 /// Declarative builder for standard frameless macOS application windows.
@@ -153,7 +153,7 @@ where
 
         let zoom_action = if self.double_click_zoom {
             self.on_traffic_lights.as_ref().map(|f| {
-                f(TrafficLightsEvent::Action(WindowControlAction::Zoom))
+                f(TrafficLightsEvent::PressEnd { index: 2, committed: true })
             })
         } else {
             None
