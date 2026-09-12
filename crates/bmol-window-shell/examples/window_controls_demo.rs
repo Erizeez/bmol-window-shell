@@ -238,7 +238,22 @@ impl Default for State {
 }
 
 fn boot() -> (State, Task<Message>) {
-    let state = State::default();
+    let mut state = State::default();
+    // `LIQUID_GLASS_TRAFFIC_LIGHT_MATERIAL=bead` (or `physical`) selects the
+    // control material at launch, so the two appearances can be compared
+    // without clicking through the panel. Unset keeps the physical default.
+    if let Ok(variant) = std::env::var("LIQUID_GLASS_TRAFFIC_LIGHT_MATERIAL") {
+        let bead = matches!(
+            variant.trim().to_ascii_lowercase().as_str(),
+            "bead" | "reference" | "flat" | "1" | "true" | "on"
+        );
+        set_reference_bead(bead);
+        state.last_action = if bead {
+            "Material: reference flat bead (work in progress)".into()
+        } else {
+            "Material: physical glass".into()
+        };
+    }
     iced_backend::set_surface(DemoSurface::WindowControls);
     iced_backend::set_color_scheme(state.scheme);
     iced_backend::set_accessibility(liquid_glass::GlassAccessibility::none());

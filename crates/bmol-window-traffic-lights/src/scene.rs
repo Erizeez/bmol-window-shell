@@ -268,6 +268,12 @@ pub fn traffic_lights_scene_for_viewport(
 /// Converts a logical-point scene into device pixels.
 pub fn scale_scene(scene: &mut GlassScene, scale_factor: f32) {
     for node in scene.nodes_mut() {
+        // A node whose backdrop region tracks its shape must keep tracking it
+        // after the scale, while a node whose builder deliberately pinned the
+        // region to a different rectangle must keep that rectangle. Decide from
+        // the pre-scale geometry, then scale the region in place, so the press
+        // scale cannot make a pinned backdrop grow with the pressed sphere.
+        let backdrop_tracks_shape = node.backdrop.bounds == node.visual_bounds();
         node.bounds.x *= scale_factor;
         node.bounds.y *= scale_factor;
         node.bounds.width *= scale_factor;
@@ -278,7 +284,14 @@ pub fn scale_scene(scene: &mut GlassScene, scale_factor: f32) {
             fused_shape.bounds.width *= scale_factor;
             fused_shape.bounds.height *= scale_factor;
         }
-        node.backdrop.bounds = node.visual_bounds();
+        let scaled_backdrop = Rect::new(
+            node.backdrop.bounds.x * scale_factor,
+            node.backdrop.bounds.y * scale_factor,
+            node.backdrop.bounds.width * scale_factor,
+            node.backdrop.bounds.height * scale_factor,
+        );
+        node.backdrop.bounds =
+            if backdrop_tracks_shape { node.visual_bounds() } else { scaled_backdrop };
         node.backdrop.padding *= scale_factor;
         node.backdrop.blur_radius *= scale_factor;
         node.material.blur.radius *= scale_factor;
@@ -460,8 +473,51 @@ mod tests {
     }
 
     #[test]
-    fn native_scene_uses_the_published_origin() {
-        crate::interaction::set_window_control_origin(12.0, 20.0);
+    fn scaling_the_scene_keeps_a_pinned_backdrop_pinned() {
+        reset_groups();
+        let mut state = TrafficLightsState::new();
+        state.on_press_start(0);
+        for _ in 0..30 {
+            state.advance(1.0 / 60.0);
+        }
+        publish_group(0, &state);
+
+        let mut scene = GlassScene::default();
+        push_traffic_light_group(
+            &mut scene,
+            &WINDOW_CONTROL_GROUPS[0].1,
+            10.0,
+            18.0,
+            14.0,
+            9.0,
+            false,
+            false,
+            false,
+            WindowControlTuning::default(),
+            &[],
+        );
+        scale_scene(&mut scene, 2.0);
+
+        let pressed = &scene.nodes()[0];
+        assert!(pressed.bounds.width > 28.0, "the sphere itself must grow");
+        assert!(
+            (pressed.backdrop.bounds.width - 28.0).abs() < 1e-3,
+            "a pinned backdrop must only follow the scale factor, got {}",
+            pressed.backdrop.bounds.width
+        );
+
+        // A node whose backdrop was never pinned keeps tracking its shape.
+        let mut tracking = GlassScene::default();
+        tracking.push(GlassNode::new(GlassId(99), Rect::new(4.0, 6.0, 20.0, 20.0)));
+        scale_scene(&mut tracking, 2.0);
+        let node = &tracking.nodes()[0];
+        assert_eq!(node.backdrop.bounds, node.bounds);
+
+        reset_groups();
+    }
+
+    #[test]
+    fn native_scene_uses_the_published_origin() {        crate::interaction::set_window_control_origin(12.0, 20.0);
         let scene = traffic_lights_scene_for_viewport(2.0, false, false, &[]);
         let nodes = scene.nodes();
         assert_eq!(nodes.len(), 3);
