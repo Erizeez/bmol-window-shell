@@ -834,7 +834,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1736,7 +1736,7 @@ source = "git+https://github.com/Erizeez/liquid-rs?tag=v0.1.3#418f7bcd91847b4eea
 [[package]]
 name = "liquid-glass-animation"
 version = "0.1.3"
-source = "git+https://github.com/Erizeez/liquid-rs?branch=main#9d8c6aa7861c2b2b5922947f0529caef07a16878"
+source = "git+https://github.com/Erizeez/liquid-rs?branch=main#ee404ad2284579a6ff5ba50bcd5497629adcf089"
 
 [[package]]
 name = "liquid-glass-geometry"
@@ -1749,7 +1749,7 @@ dependencies = [
 [[package]]
 name = "liquid-glass-geometry"
 version = "0.1.3"
-source = "git+https://github.com/Erizeez/liquid-rs?branch=main#9d8c6aa7861c2b2b5922947f0529caef07a16878"
+source = "git+https://github.com/Erizeez/liquid-rs?branch=main#ee404ad2284579a6ff5ba50bcd5497629adcf089"
 dependencies = [
  "squircle-rs",
 ]
@@ -1769,7 +1769,7 @@ dependencies = [
 [[package]]
 name = "liquid-glass-render"
 version = "0.1.3"
-source = "git+https://github.com/Erizeez/liquid-rs?branch=main#9d8c6aa7861c2b2b5922947f0529caef07a16878"
+source = "git+https://github.com/Erizeez/liquid-rs?branch=main#ee404ad2284579a6ff5ba50bcd5497629adcf089"
 dependencies = [
  "bytemuck",
  "liquid-glass-scene 0.1.3 (git+https://github.com/Erizeez/liquid-rs?branch=main)",
@@ -1789,7 +1789,7 @@ dependencies = [
 [[package]]
 name = "liquid-glass-scene"
 version = "0.1.3"
-source = "git+https://github.com/Erizeez/liquid-rs?branch=main#9d8c6aa7861c2b2b5922947f0529caef07a16878"
+source = "git+https://github.com/Erizeez/liquid-rs?branch=main#ee404ad2284579a6ff5ba50bcd5497629adcf089"
 dependencies = [
  "liquid-glass-geometry 0.1.3 (git+https://github.com/Erizeez/liquid-rs?branch=main)",
 ]
@@ -1822,7 +1822,7 @@ dependencies = [
 [[package]]
 name = "liquid-rs"
 version = "0.1.3"
-source = "git+https://github.com/Erizeez/liquid-rs?branch=main#9d8c6aa7861c2b2b5922947f0529caef07a16878"
+source = "git+https://github.com/Erizeez/liquid-rs?branch=main#ee404ad2284579a6ff5ba50bcd5497629adcf089"
 dependencies = [
  "liquid-glass-animation 0.1.3 (git+https://github.com/Erizeez/liquid-rs?branch=main)",
  "liquid-glass-geometry 0.1.3 (git+https://github.com/Erizeez/liquid-rs?branch=main)",
@@ -2793,7 +2793,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3880,7 +3880,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
