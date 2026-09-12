@@ -420,3 +420,86 @@ Native 组加 “Preview mode” 开关（默认开）：开启时红了不发 `
 **仍存在的第二份依赖**：published `bmol-window-shell v0.1.8` tag 里带着旧的 `bmol-window-glass`，它把 `liquid-glass-scene` / `liquid-glass-render` 又拉了一份 `tag=v0.1.3`。这份是 bmol-iced 的 `bmol-window-shell` 依赖造成的循环，本地代码并不使用它，因此不影响渲染结果与类型对齐；彻底清掉需要：提交本仓库的红绿灯重构 → 打新 tag → 把 bmol-iced 的 `bmol-window-shell` 依赖前移。
 
 **待确认**：`0.12 / 0.06` 这两个增益未经目视校准。另外"非聚集情况中间光感仅为 55%"我未能对应到唯一位置，候选有三个：`pressLight` 的 `0.62 + 0.38*localFocus`（但对红绿灯是死代码）、`trafficLightBodyResponse` 的中间光 `0.045 + 0.055`、以及 `EXTERNAL_TAIL_STRENGTH = 0.55`（与中间光无关）。若指第二项，需要单独上调。
+
+---
+
+## 第六轮：bead 变体的两个结构缺陷 + dpr
+
+前几轮之所以一直修不好 bead，是因为在**猜**，而且猜错了方向。这一轮改为读源码定论。
+
+### 6.1 bead 的圆其实一开始就是对的
+
+`mainSDF(p1, p2, p)` 里的 `u_mouseSpring` 并不是"指针"，而是 **node 中心**：
+
+```
+uniform_for_node:  mouse_and_spring: [pointer_x, pointer_y, center_x, center_y]
+center_x = bounds.x + bounds.width * 0.5
+center_y = size.height - bounds.y - bounds.height * 0.5      // y-up 物理像素
+```
+
+所以 `p2n = p2 + pixel/res.y = (pixel - center)/res.y`，`d2` 就是**单颗控件自己的圆**
+（`GlassShape::Circle` → `roundness 2.0` + `radius = min(w,h)*0.5`，经 `roundedRectSDF`
+退化为正圆）。`beadOffset = (0 - pixel)/res.y - p2 = (center - pixel)/res.y = -p2n`，
+长度相同；`nx` 的符号与 B 相反但所有用到 `nx` 的项都是偶函数，`ny` 的符号与 B 一致
+（都表示"在中心下方"）。**算术上从来没有错。**
+
+之前"品红铺满整组矩形"的观测，正确的解释是下面 6.2，而不是"圆算错了"。
+
+### 6.2 两个真正的缺陷
+
+1. **整块正方形**：glass pass 是 `blend: None`，片元**直接替换** render target。
+   bead 分支原先 `return vec4f(bead, shapeAlpha * opacity)`，而 `bead` 在圆外等于
+   `u_tint.rgb` —— alpha 拦不住 RGB，于是整个 node quad 被涂成 tint 色。quad =
+   node bounds = 随按压弹簧缩放的球体 bounds，所以这个正方形**还会跟着动画缩放**。
+   物理路径早在 1486 行就为同一问题留了注释（"leaves a visible red box"），解法是
+   `sampleActualBackdrop` 后在 shader 内自己合成。bead 需要遵守同一约定。
+
+2. **覆盖来自合并剪影**：原来用 `shapeAlpha`（来自 `merged`），而 `merged` 里含
+   `shape 1` 和全部 fused layer。改为把 node 自身剪影从 `mainSDF` 拆成 `shapeSDF`，
+   bead 只从 `shapeSDF` 取覆盖。
+
+### 6.3 顺带修掉的 backdrop pin（native 路径）
+
+`scale_scene` 末尾无条件执行 `node.backdrop.bounds = node.visual_bounds()`，
+把 `push_traffic_light_group` 设的"静止尺寸"pin 覆盖掉了，于是 native 路径上
+**模糊矩形又跟着按压弹簧一起长大**。改为按 pre-scale 几何判断该 region 是否跟随形状：
+跟随则重取 `visual_bounds()`，被 pin 过则原地乘缩放因子。
+
+### 6.4 dpr：边圈窄了 29%
+
+B 的光栅器把 rim span 写成 `2 * max(1.8, 2.4*sqrt(size/14))`，`size` 是**逻辑点**、
+前面的 2 是固定 dpr。shader 里 `u_dpr` 恒为 1.0（因为所有 shape uniform 已经是物理像素，
+`u_dpr` 只是历史遗留的 no-op），两个项都塌回 1x：
+
+| 控件 | B | 改前 shader | 改后 shader |
+|---|---|---|---|
+| 64 pt | `2*max(1.8, 2.4*√(64/14))` = 10.26 px | 7.26 px | 10.26 px |
+| 14 pt | `2*max(1.8, 2.4*1)` = 4.80 px | 3.39 px | 4.80 px |
+
+两个项的偏差倍数还不一样（2x 与 √2），所以不是一个能凑的系数。做法：
+`GlassRenderOptions::scale_factor`（默认 1.0）→ `resolution_dpr_pad` 的第 4 个空槽 →
+WGSL `u_renderScale`，**只给 bead 用**。守卫测试钉死"任何 shape 槽位都不得跟随它"。
+
+### 6.5 验证
+
+| 项目 | 结果 |
+|---|---|
+| `liquid-rs` `cargo test --workspace` | 25 项通过（含 `create_shader_module` 的 naga 校验、`GlassUniform` = 528 布局守卫） |
+| shell `cargo test --workspace` | 69 项通过（含新增 `scaling_the_scene_keeps_a_pinned_backdrop_pinned`） |
+| physical 变体截图 | dpr 改动**前后 bit-identical**（sha256 `b3ad1e3e…`），证明只影响 bead |
+| bead 变体截图 | 正方形消失；圆盘正确；深红暗边对称出现在左右两侧 |
+| 像素级核对 | 圆盘中线 x=36..140 恒为 `(255,94,84)`（无横向不对称）；纵向 G 由顶部 85 升到底部 101，即 B 的 `axial` 垂直辉光 |
+
+**仍待目视校准**：bead 的 `0.88` 基数在 B 里是 **sRGB 空间**乘法，而 shader 在
+**线性光**里做，两者不完全等价（约 4% 偏亮），且红色内部 R 已顶到 255。这一项是否能接受，
+需要你看过 bead 之后判断；相关旋钮（center glow / saturation lift / rim span / core span /
+edge darkness / highlight）都在面板上。
+
+### 6.6 本轮提交
+
+| 仓库 | commit | 内容 |
+|---|---|---|
+| liquid-rs | `e3fd302` | bead 合成到 backdrop 之上；`shapeSDF` 拆出 |
+| liquid-rs | `d23ff66` | `GlassRenderOptions::scale_factor` + `u_renderScale` |
+| bmol-window-shell | `5934a86` | backdrop pin 跨缩放保持；demo 支持 `LIQUID_GLASS_TRAFFIC_LIGHT_MATERIAL=bead\|physical` |
+| bmol-window-shell | `a886ea9` | 把 `viewport.scale_factor()` 送进 render options |
