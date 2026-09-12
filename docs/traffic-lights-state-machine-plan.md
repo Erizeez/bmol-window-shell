@@ -691,3 +691,90 @@ colour    = tint_srgb × (0.88 + 0.165 + 0.017706) = tint_srgb × 1.062706
 三条路线：**(a)** 删掉 physical 旋钮，并把 `bead_*` 那组接进面板（推荐）；
 **(b)** 删掉纯 physical 的（substrate/angular/light_angle/body_thickness/side_edge_*），
 把有硬编码孪生的那几个改为驱动 bead；**(c)** 全删，bead 常量就保持硬编码，不做面板。
+
+---
+
+## 第八轮：physical 渲染路径彻底删除
+
+### 8.1 已完成（liquid-rs `481043a`，已推送）
+
+**可证明性前提**：bead 分支提前返回，且 `GlassVariant::TrafficLight` /
+`TrafficLightPhysical` 全仓已无构造点（grep 确认）。因此到达 `fs_main` compose 阶段的
+节点只有 `Regular` / `Clear`，而这两个变体**都不置** `FEATURE_TRAFFIC_LIGHT*`。
+所以 compose 阶段里所有 `isTrafficLight()` / `FEATURE_TRAFFIC_LIGHT_PHYSICAL` 分支
+都是恒假死分支，逐个取"非 traffic"那一支即可，输出不变。
+
+| 删除项 | 数量 |
+|---|---|
+| physical 专属函数（含 `trafficLightBodyResponse`、`trafficLightThinness`、`trafficLightPhysicalEdgeAbsorption` 等） | 11 |
+| 死常量（`TRAFFIC_LIGHT_COATING_BAND`、`TRAFFIC_LIGHT_MIN_THICKNESS` 等） | 9 |
+| uniform 槽（`u_trafficLight*`、`u_coreLight*`、`u_rimProfile`） | 6 |
+| 类型 `TrafficLightStyle` / `CoreLight` / `RimProfile` + `GlassMaterial` 字段 | 3 + 3 |
+| flag `FEATURE_TRAFFIC_LIGHT_PHYSICAL` / `..._REFERENCE` | 2 |
+
+`GlassUniform` 从 **528 → 432** 字节（27×16），布局守卫测试同步更新。
+`fragment-main.wgsl` 从 **1510 → 1085** 行（−425）；`liquid-glass-scene/src/lib.rs` −179 行。
+
+**保留但改名/改归属的两项**（它们并非 traffic 专属）：
+- `trafficLightPigment` / `calibrateTrafficLightColor` 保留 —— 二者按**色相**门控
+  （`redSignal = smoothstep(0.65, 0.90, tint.r - max(tint.g, tint.b))`），对红色调的
+  普通 glass 仍然生效，删掉会改变行为。
+- `body_thickness` 原先放在 `TrafficLightStyle` 里，但 `refractionBodyNormal`
+  **无条件**读它来压扁通用体光学 —— 现在变成 shader 常量 `SURFACE_BODY_THICKNESS = 0.79`
+  （与旧默认值逐位相同）。
+
+### 8.2 面板（shell `d1907a8`，已推送）
+
+删掉 `WindowControlTuning` 里 22 个 physical-only 旋钮、`TrafficLightStyleFields`、
+`material_fields` 里的 `core_light`/`rim_profile`/`style`，以及 `scene.rs` 对
+`TrafficLightStyle`/`CoreLight`/`RimProfile` 的写入。面板改名 **"Bead material tuning"**，
+只列有效旋钮，并**新暴露 `bead_b1/b2/b3`（液滴控制点）**——此前它们无法从 UI 调整。
+
+发现并修正：面板上多数 physical 旋钮对 bead **完全无效**，而其中若干在 shader 里
+有被硬编码的同名孪生（`vertical_power 1.35`、`horizontal_power 0.25`、
+`lateral_power 2.0`、`axial_glow 0.46` vs 硬编码 `0.42`），
+且 `core_lift` 与 `bead_saturation_lift` 完全重复——面板编辑前者、bead 读后者。
+按你的选择（路线 a），这些孪生常量保持硬编码。
+
+### 8.3 验证状态 —— 请注意这里有一个缺口
+
+| 批次 | 验证 |
+|---|---|
+| 两个死变体 + reference backdrop（`dbf707f`） | ✅ **比特级**：常规 glass 区 `18bf0179…`、bead 区 `8498f808…` 前后完全一致 |
+| 面板 / 调参字段（`d1907a8`） | ✅ **比特级**：bead 区 `8498f808…` 不变 |
+| shader + uniform 拆除（`481043a`） | ⚠️ **仅编译级**：naga 校验通过、`GlassUniform` 布局守卫通过、26 项测试通过。**没有截图级的输出等价证明** |
+
+第三批没能做截图验证，原因有两个，都不是代码问题：
+1. shell 依赖 `bmol-iced` 的**已推送 main**，而该 crate 转出了已删除的 `TrafficLightStyle`。
+   修复只有一行，但那一行所在的文件 `crates/bmol-iced/src/lib.rs` **同时含你的未提交 WIP**
+   （`ClarityPolicy`、`dock` 的转出），我不能替你提交。
+2. 用"本地 path patch 指向 bmol-iced"绕过时，你的 WIP 主题改变了 demo 的 UI 布局，
+   使前后截图失去可比性；随后 macOS 辅助功能权限被拒（`-1719`），无法再定位窗口。
+
+**因此 `481043a` 的输出等价性目前只有分析证明，没有像素证明。** 这一点必须由你复核。
+
+### 8.4 你需要做的三步
+
+```bash
+# 1) bmol-iced：提交那一行（它与你的 WIP 在同一文件，需你来提交）
+#    crates/bmol-iced/src/lib.rs 的 scene 转出里删掉 `TrafficLightStyle,`
+cd ~/Workspace/bmol-workspace/bmol-iced && git add -A && git commit -m "chore: drop the removed TrafficLightStyle re-export" && git push
+
+# 2) shell：把锁移到拆除后的 liquid-rs
+cd ~/Workspace/bmol-workspace/bmol-window-shell
+cargo update -p "git+https://github.com/Erizeez/liquid-rs?branch=main#liquid-glass-scene@0.1.3"
+cargo build --example window_controls_demo
+
+# 3) 目视确认红绿灯与常规 glass，然后我（或你）把锁提交
+```
+
+当前 shell 的锁**故意停在 `dbf707f4`**（拆除之前），以保证仓库现在就能构建；
+shell 自身的代码（`d1907a8`）对两个 rev 都兼容。
+
+### 8.5 附带发现：bmol-iced 的 `bmol-glass-iced` 已失效
+
+`bmol-iced` 的 `bmol-glass-iced` 依赖 `bmol-window-glass`，而后者在 bmol-window-shell
+main 上**已被删除**；它此前能编译只是因为 `bmol-iced` 的 `[patch]` 把 liquid-rs 指到
+本地路径，恰好还在提供 `TrafficLightStyle`。这次拆除后它会失败。需要决定：
+删掉 `bmol-glass-iced` 成员，或把 bmol-iced 的 `bmol-window-shell` 依赖从
+`tag = "v0.1.8"` 前移到 `branch = "main"`（顺带解掉那个循环依赖）。
