@@ -47,6 +47,12 @@ pub struct WindowControlTuning {
     pub vertical_power: f32,
     /// Exponent of the horizontal roll-off; smaller widens the lit centre.
     pub horizontal_power: f32,
+    /// Exponent of `|normal.x|` for the lateral (left/right) rim weight.
+    pub lateral_power: f32,
+    /// Residual rim absorption kept on the upper and lower arcs.
+    pub vertical_floor: f32,
+    /// Exponent of the grazing term; larger keeps absorption near the edge.
+    pub grazing_power: f32,
 }
 
 impl WindowControlTuning {
@@ -80,6 +86,9 @@ impl WindowControlTuning {
             core_power: 4.0,
             vertical_power: 1.35,
             horizontal_power: 0.25,
+            lateral_power: 2.0,
+            vertical_floor: 0.28,
+            grazing_power: 0.85,
         }
     }
 
@@ -118,6 +127,9 @@ impl WindowControlTuning {
                 core_power: 4.0,
                 vertical_power: 1.35,
                 horizontal_power: 0.25,
+                lateral_power: 2.0,
+                vertical_floor: 0.28,
+                grazing_power: 0.85,
             }
         } else {
             Self::new()
@@ -155,6 +167,7 @@ impl WindowControlTuning {
                 self.vertical_power,
                 self.horizontal_power,
             ],
+            rim_profile: [self.lateral_power, self.vertical_floor, self.grazing_power],
             style: TrafficLightStyleFields {
                 substrate_coverage: self.substrate_coverage,
                 lower_substrate_coverage: self.lower_substrate_coverage,
@@ -202,6 +215,9 @@ impl WindowControlTuning {
             core_power: self.core_power.clamp(1.0, 8.0),
             vertical_power: self.vertical_power.clamp(0.25, 4.0),
             horizontal_power: self.horizontal_power.clamp(0.05, 2.0),
+            lateral_power: self.lateral_power.clamp(0.25, 16.0),
+            vertical_floor: self.vertical_floor.clamp(0.0, 1.0),
+            grazing_power: self.grazing_power.clamp(0.1, 4.0),
         }
     }
 }
@@ -245,6 +261,8 @@ pub struct TrafficLightMaterialFields {
     /// Centre light, in the order uniform, thin, core lift, axial glow, core
     /// power, vertical power, horizontal power.
     pub core_light: [f32; 7],
+    /// Rim shaping, in the order lateral power, vertical floor, grazing power.
+    pub rim_profile: [f32; 3],
     pub style: TrafficLightStyleFields,
 }
 
@@ -292,6 +310,7 @@ mod tests {
             revealed.core_light,
             [0.045, 0.055, 0.25, 0.46, 4.0, 1.35, 0.25]
         );
+        assert_eq!(revealed.rim_profile, [2.0, 0.28, 0.85]);
         assert_eq!(revealed.style.substrate_coverage, tuning.substrate_coverage);
         assert_eq!(revealed.blur_radius, tuning.blur_radius);
         assert_eq!(revealed.refraction_strength, tuning.refraction_strength);
@@ -327,6 +346,9 @@ mod tests {
             core_power: 99.0,
             vertical_power: 0.0,
             horizontal_power: 9.0,
+            lateral_power: 0.0,
+            vertical_floor: 5.0,
+            grazing_power: 9.0,
         }
         .clamped();
 
@@ -346,5 +368,8 @@ mod tests {
         assert_eq!(wild.core_power, 8.0);
         assert_eq!(wild.vertical_power, 0.25);
         assert_eq!(wild.horizontal_power, 2.0);
+        assert_eq!(wild.lateral_power, 0.25);
+        assert_eq!(wild.vertical_floor, 1.0);
+        assert_eq!(wild.grazing_power, 4.0);
     }
 }

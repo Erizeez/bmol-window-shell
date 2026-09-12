@@ -6,7 +6,7 @@
 
 use liquid_glass_scene::{
     Color, CoreLight, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
-    GlassVariant, InteractionResponse, Rect, TrafficLightStyle,
+    GlassVariant, InteractionResponse, Rect, RimProfile, TrafficLightStyle,
 };
 
 use crate::interaction::{
@@ -89,6 +89,11 @@ pub fn traffic_light_material(
         core_power: fields.core_light[4],
         vertical_power: fields.core_light[5],
         horizontal_power: fields.core_light[6],
+    };
+    material.rim_profile = RimProfile {
+        lateral_power: fields.rim_profile[0],
+        vertical_floor: fields.rim_profile[1],
+        grazing_power: fields.rim_profile[2],
     };
     material.refraction.strength = fields.refraction_strength;
     material.fresnel.strength = fields.fresnel_strength;

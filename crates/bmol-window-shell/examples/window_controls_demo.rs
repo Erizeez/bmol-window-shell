@@ -168,6 +168,9 @@ enum TuningParameter {
     CorePower,
     VerticalPower,
     HorizontalPower,
+    LateralPower,
+    VerticalFloor,
+    GrazingPower,
 }
 
 #[derive(Debug, Clone)]
@@ -361,6 +364,9 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
                 TuningParameter::CorePower => state.tuning.core_power = value,
                 TuningParameter::VerticalPower => state.tuning.vertical_power = value,
                 TuningParameter::HorizontalPower => state.tuning.horizontal_power = value,
+                TuningParameter::LateralPower => state.tuning.lateral_power = value,
+                TuningParameter::VerticalFloor => state.tuning.vertical_floor = value,
+                TuningParameter::GrazingPower => state.tuning.grazing_power = value,
             }
             iced_backend::set_window_control_tuning(state.tuning);
         }
@@ -534,7 +540,10 @@ core_lift = {core_lift:.4}\n\
 axial_glow = {axial_glow:.4}\n\
 core_power = {core_power:.4}\n\
 vertical_power = {vertical_power:.4}\n\
-horizontal_power = {horizontal_power:.4}\n",
+horizontal_power = {horizontal_power:.4}\n\
+lateral_power = {lateral_power:.4}\n\
+vertical_floor = {vertical_floor:.4}\n\
+grazing_power = {grazing_power:.4}\n",
         edited = state.document_edited,
         blur_radius = tuning.blur_radius,
         internal_scattering = tuning.internal_scattering,
@@ -562,6 +571,9 @@ horizontal_power = {horizontal_power:.4}\n",
         core_power = tuning.core_power,
         vertical_power = tuning.vertical_power,
         horizontal_power = tuning.horizontal_power,
+        lateral_power = tuning.lateral_power,
+        vertical_floor = tuning.vertical_floor,
+        grazing_power = tuning.grazing_power,
     )
 }
 
@@ -783,6 +795,30 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             0.05..=2.0,
             0.05,
             |value| Message::TuningChanged { parameter: TuningParameter::HorizontalPower, value },
+        ),
+        components::setting_slider_with_step(
+            "Rim lateral power",
+            format!("{:.2}", tuning.lateral_power),
+            tuning.lateral_power,
+            0.25..=16.0,
+            0.25,
+            |value| Message::TuningChanged { parameter: TuningParameter::LateralPower, value },
+        ),
+        components::setting_slider_with_step(
+            "Rim vertical floor",
+            format!("{:.0}%", tuning.vertical_floor * 100.0),
+            tuning.vertical_floor,
+            0.0..=1.0,
+            0.01,
+            |value| Message::TuningChanged { parameter: TuningParameter::VerticalFloor, value },
+        ),
+        components::setting_slider_with_step(
+            "Rim grazing power",
+            format!("{:.2}", tuning.grazing_power),
+            tuning.grazing_power,
+            0.1..=4.0,
+            0.05,
+            |value| Message::TuningChanged { parameter: TuningParameter::GrazingPower, value },
         ),
     ]);
 
