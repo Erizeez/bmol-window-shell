@@ -68,7 +68,3 @@ path = "examples/window_demo.rs"
 name = "window_controls_demo"
 path = "examples/window_controls_demo.rs"
 
-[[example]]
-name = "minimal_shell"
-path = "examples/minimal_shell.rs"
-

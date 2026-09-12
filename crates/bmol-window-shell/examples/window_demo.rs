@@ -1,17 +1,48 @@
-//! Complete authentic macOS Window Demo with Custom Traffic Lights and Frameless Chrome.
+//! The canonical frameless window shell example.
 //!
-//! Features:
-//! - Pure frameless window (`decorations: false`), completely eliminating system black borders and outlines
-//! - Hand-crafted Apple-style traffic lights (Close, Minimize, Maximize) with authentic colors, borders, and actions
-//! - Two layout strategies:
-//!   1. Standalone Titlebar (Separate): 32px white titlebar, left-aligned title strictly 16px from traffic lights
-//!   2. Unified Chrome (Integrated): Seamless sidebar extending to top with automatic traffic lights clearance
-//! - Full window dragging support across titlebar drag regions
-//! - SkyLight real-time blur, continuous squircle curvature, and Stage Manager re-blur protection
+//! This is the one example the crate ships, and it is meant to be read as much
+//! as run: the wiring below is the recommended integration, and everything
+//! after it is the feature surface.
+//!
+//! # The minimum correct wiring
+//!
+//! 1. A [`WindowShellController`] owns the chrome metrics. Ask it for layout —
+//!    insets, the header rect, safe client bounds — instead of computing them.
+//! 2. `decorations: false` plus `transparent: true` in the window settings is
+//!    what makes the window frameless in the first place.
+//! 3. On `window::open_events()`: `controller.set_window_id(id)`, then
+//!    [`bmol_window_shell::setup_native_window`] once with
+//!    [`bmol_window_shell::NativeWindowOptions`] for EDR, the Stage Manager
+//!    re-blur guard, and squircle corner masking.
+//! 4. On `window::resize_events()`: `controller.handle_resized(width, height)`.
+//!    The controller keeps `window_size` and the derived metrics in step.
+//! 5. Wrap the page in `controller.wrap_window_with_resizer(page, radius,
+//!    on_resize)`: the physical non-client rim and the eight interactive border
+//!    handles in one call, with the fullscreen guard derived from the
+//!    controller's own window state.
+//! 6. `controller.loyal_drag_bar(height, content, on_drag, on_double_click)` for
+//!    the titlebar.
+//!
+//! # What this example adds on top
+//!
+//! - Hand-crafted Apple-style traffic lights (Close, Minimize, Zoom) drawn
+//!   through the Liquid Glass compositor, with authentic colourimetry, the
+//!   glyph layer, hover reveal, and the press-scale spring.
+//! - Three chrome layout strategies:
+//!   1. Standalone Titlebar (Separate): a white titlebar with the title
+//!      left-aligned after the traffic lights.
+//!   2. Unified Chrome, single pane: the content column starts at the window's
+//!      top edge, below the traffic lights.
+//!   3. Unified Chrome, multi-pane: a sidebar that runs to the top edge, with
+//!      automatic traffic-light clearance.
+//! - Full window dragging across the titlebar drag regions.
+//! - Live controls for the chome knobs: SkyLight blur radius and opacity,
+//!   corner radius, EDR, the native system shadow, and the Stage Manager
+//!   guard. Toggling them re-runs the one-shot native setup.
 
 use bmol_window_shell::{
-    ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics, WindowRimConfig,
-    WindowShellController, loyal_drag_bar, traffic_lights, window_metrics, wrap_window_rim,
+    ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics,
+    WindowShellController, loyal_drag_bar, traffic_lights, window_metrics,
 };
 use iced::widget::{
     button, column, container, row, scrollable, slider, space, text, toggler,
@@ -447,17 +478,13 @@ fn view(state: &DemoState) -> AppElement<'_> {
         LayoutSelection::UnifiedMultiPane => view_unified_multi_pane(state, plan),
     };
 
-    let rimmed = wrap_window_rim(
-        content,
-        WindowRimConfig::new(state.is_dark())
-            .with_corner_radius(state.corner_radius as f32),
-    );
-
-    bmol_window_shell::wrap_border_resizer(
-        rimmed,
-        false,
-        Message::ResizeWindow,
-    )
+    // The canonical wrapper: the physical non-client rim plus the eight
+    // interactive border handles, with the fullscreen guard and the rim
+    // geometry taken from the controller. Assembling those two by hand -- as
+    // this demo used to -- means remembering the fullscreen case yourself.
+    state
+        .shell
+        .wrap_window_with_resizer(content, state.corner_radius as f32, Message::ResizeWindow)
 }
 
 // =========================================================================
