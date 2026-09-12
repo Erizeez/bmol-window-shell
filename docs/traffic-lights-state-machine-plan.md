@@ -778,3 +778,45 @@ main 上**已被删除**；它此前能编译只是因为 `bmol-iced` 的 `[patc
 本地路径，恰好还在提供 `TrafficLightStyle`。这次拆除后它会失败。需要决定：
 删掉 `bmol-glass-iced` 成员，或把 bmol-iced 的 `bmol-window-shell` 依赖从
 `tag = "v0.1.8"` 前移到 `branch = "main"`（顺带解掉那个循环依赖）。
+
+### 8.6 验证缺口已补齐（`481043a` 现已像素级可证）
+
+§8.3 记的缺口已经解决。方法是绕开两个障碍：
+
+1. **不碰你的 bmol-iced 工作区**：用 git plumbing 合成一个提交
+   `3ab7be0 + 仅那一行修复`（`hash-object` → 临时 index → `write-tree` → `commit-tree`，
+   全程只写 object DB，不动工作区也不动 index），再用 `git archive` 导出到 `/tmp`，
+   shell 用**临时** `[patch]` 指向它。这样 bmol-iced 与基线完全同源，UI 布局不变，
+   截图才有可比性。
+2. **窗口聚焦**：上一轮的 `-1719` 只出现在查询 `position/size` 时，
+   `set frontmost` 一直可用。
+
+**A/B 设计**：同一份 shell 代码（`b1` 那批），只切换 liquid-rs 的 rev，
+从而把差异严格隔离到本次拆除。两次运行都捕获 bead 区作为内部控制。
+
+| 区域 | `dbf707f`（拆除前） | `481043a`（拆除后） |
+|---|---|---|
+| **常规 glass toolbar**（1200×104 px，`GlassVariant::Regular`，`GlassId(90)`/`GlassRole::Toolbar`） | `ef2da48990a2…` | `ef2da48990a2…` ✅ |
+| bead 区（380×220 pt） | `8498f8086fca…` | `8498f8086fca…` ✅ |
+| 内部控制：两次运行的 bead 区 | `8498f8086fca…` | `8498f8086fca…` ✅ |
+
+**为什么这次特意加了 toolbar**：先前我拿"面板区"当常规 glass 的探针是**错的**——
+那个区域是 iced 面板，不是 glass，根本没覆盖通用路径。demo 里真正的常规 glass node
+是 `window_controls_scene` 里那个 `GlassRole::Toolbar`，所以改用它的右段（避开红绿灯）。
+被删掉的 `isTrafficLight()` 分支和 `body_thickness` 影响面就在这条路径上。
+
+至此三批全部有像素级输出等价证明：
+
+| 批次 | 提交 | 证明 |
+|---|---|---|
+| 两个死变体 + reference backdrop | `dbf707f` | 常规 glass + bead 比特一致 |
+| 面板 / 调参字段 | shell `d1907a8` | bead 比特一致 |
+| shader + uniform 拆除 | `481043a` | **常规 glass toolbar + bead 比特一致** |
+
+### 8.7 仍未落地的一件事（需要你）
+
+shell 的 `Cargo.lock` **仍停在 `dbf707f4`**，即仓库现在可构建、但还没用上 `481043a`。
+原因是 `bmol-iced` 的已推送 main 仍在转出已删除的 `TrafficLightStyle`，
+而修复那一行所在的文件与你的未提交 WIP 混在一起，我不能替你提交（§8.4 有命令）。
+
+`481043a` 的验证是用合成提交绕过去做的，那个分支/对象不会被推送，也不会污染你的仓库。
