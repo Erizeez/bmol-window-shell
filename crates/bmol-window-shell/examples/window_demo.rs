@@ -11,7 +11,7 @@
 
 use bmol_window_shell::{
     ChromeDrawPlan, ChromeLayoutMode, WindowChromeConfig, WindowChromeMetrics, WindowRimConfig,
-    loyal_drag_bar, traffic_lights, window_metrics, wrap_window_rim,
+    WindowShellController, loyal_drag_bar, traffic_lights, window_metrics, wrap_window_rim,
 };
 use iced::widget::{
     button, column, container, row, scrollable, slider, space, text, toggler,
@@ -79,8 +79,10 @@ enum Message {
 
 #[derive(Debug)]
 struct DemoState {
-    window_id: Option<window::Id>,
-    window_size: Size,
+    /// Owns the window identity, size and chrome metrics. The demo drives it
+    /// rather than keeping its own copies, which is the integration pattern the
+    /// shell recommends.
+    shell: WindowShellController,
     active_tab: usize,
     layout_selection: LayoutSelection,
     theme_preference: ThemePreference,
@@ -98,7 +100,6 @@ struct DemoState {
     corner_radius: f64,
     opacity: f32,
     native_attached: bool,
-    metrics: WindowChromeMetrics,
 }
 
 impl Default for DemoState {
@@ -111,11 +112,12 @@ impl Default for DemoState {
         } else {
             iced::theme::Mode::Light
         };
-        let metrics = WindowChromeMetrics::compute_with_theme(980.0, 640.0, &default_config, initial_dark);
+        let mut shell = WindowShellController::new(default_config, initial_dark);
+        shell.set_window_size(980.0, 640.0);
+        shell.recompute_metrics();
 
         Self {
-            window_id: None,
-            window_size: Size::new(980.0, 640.0),
+            shell,
             active_tab: 0,
             layout_selection: LayoutSelection::Separate,
             theme_preference: ThemePreference::System,
@@ -133,7 +135,6 @@ impl Default for DemoState {
             corner_radius: window_metrics::DEFAULT_CORNER_RADIUS as f64,
             opacity: 0.88,
             native_attached: false,
-            metrics,
         }
     }
 }
@@ -170,7 +171,7 @@ impl DemoState {
     }
 
     fn update_metrics(&mut self) {
-        let config = match self.layout_selection {
+        self.shell.config = match self.layout_selection {
             LayoutSelection::Separate => {
                 WindowChromeConfig::separate(self.separate_titlebar_height)
             }
@@ -181,12 +182,8 @@ impl DemoState {
                 WindowChromeConfig::unified(self.unified_header_height, Some(self.sidebar_width))
             }
         };
-        self.metrics = WindowChromeMetrics::compute_with_theme(
-            self.window_size.width,
-            self.window_size.height,
-            &config,
-            self.is_dark(),
-        );
+        self.shell.set_dark_mode(self.is_dark());
+        self.shell.recompute_metrics();
     }
 
     fn sync_window_controls_backend(&self) {
@@ -199,7 +196,7 @@ impl DemoState {
         iced_backend::set_window_control_tuning(WindowControlTuning::for_scheme(scheme == UiColorScheme::Dark));
         iced_backend::set_window_inactive(!self.window_focused);
 
-        let rim_insets = self.metrics.rim_insets.top;
+        let rim_insets = self.shell.metrics.rim_insets.top;
         let header_height = match self.layout_selection {
             LayoutSelection::Separate => self.separate_titlebar_height,
             LayoutSelection::UnifiedSinglePane | LayoutSelection::UnifiedMultiPane => {
@@ -213,7 +210,7 @@ impl DemoState {
     }
 
     fn sync_native_window(&self) -> Task<Message> {
-        if let Some(id) = self.window_id {
+        if let Some(id) = self.shell.window_id {
             let options = bmol_window_shell::NativeWindowOptions::new()
                 .with_corner_radius(self.corner_radius)
                 .with_appearance(self.native_appearance())
@@ -257,16 +254,16 @@ fn boot() -> (DemoState, Task<Message>) {
 fn update(state: &mut DemoState, message: Message) -> Task<Message> {
     let task = match message {
         Message::WindowOpened(id) => {
-            state.window_id = Some(id);
+            state.shell.set_window_id(id);
             state.native_attached = true;
             state.sync_native_window()
         }
         Message::WindowResized(size) => {
-            state.window_size = size;
+            state.shell.handle_resized(size.width, size.height);
             Task::none()
         }
         Message::ResizeWindow(direction) => {
-            if let Some(id) = state.window_id {
+            if let Some(id) = state.shell.window_id {
                 window::drag_resize(id, direction)
             } else {
                 Task::none()
@@ -368,14 +365,14 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
             state.sync_native_window()
         }
         Message::ToggleMaximize => {
-            if let Some(id) = state.window_id {
+            if let Some(id) = state.shell.window_id {
                 window::toggle_maximize(id)
             } else {
                 Task::none()
             }
         }
         Message::DragWindow => {
-            if let Some(id) = state.window_id {
+            if let Some(id) = state.shell.window_id {
                 window::drag(id)
             } else {
                 Task::none()
@@ -387,8 +384,8 @@ fn update(state: &mut DemoState, message: Message) -> Task<Message> {
             let action = state.traffic_lights.handle_event(event);
             iced_backend::publish_group(0, &state.traffic_lights);
             match action {
-                Some(action) if state.window_id.is_some() => {
-                    let id = state.window_id.expect("checked above");
+                Some(action) if state.shell.window_id.is_some() => {
+                    let id = state.shell.window_id.expect("checked above");
                     match action {
                         ControlAction::Close => window::close(id),
                         ControlAction::Minimize => window::minimize(id, true),
@@ -440,7 +437,7 @@ fn subscription(state: &DemoState) -> Subscription<Message> {
 }
 
 fn view(state: &DemoState) -> AppElement<'_> {
-    let plan = ChromeDrawPlan::from_metrics(&state.metrics);
+    let plan = ChromeDrawPlan::from_metrics(&state.shell.metrics);
 
     let content = match state.layout_selection {
         LayoutSelection::Separate => view_separate_window(state, plan),
@@ -666,7 +663,7 @@ fn view_header_actions(state: &DemoState) -> AppElement<'_> {
 // =========================================================================
 
 fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<'_> {
-    let titlebar_height = state.metrics.header_rect.height;
+    let titlebar_height = state.shell.metrics.header_rect.height;
     let is_dark = state.is_dark();
 
     let titlebar_bg = if is_dark {
@@ -692,7 +689,7 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
 
     let mode_switch = view_header_actions(state);
 
-    let rim_left = state.metrics.rim_insets.left;
+    let rim_left = state.shell.metrics.rim_insets.left;
     let symmetric_margin = ((titlebar_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
     let slop = traffic_lights::control_hover_slop(WINDOW_CONTROL_NATIVE_SIZE);
     let leading_spacer_w = (symmetric_margin - slop).max(0.0);
@@ -791,7 +788,7 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
         .height(Length::Fill);
 
     if state.show_hitboxes {
-        outer_col = outer_col.push(view_hitboxes_overlay_banner(&state.metrics));
+        outer_col = outer_col.push(view_hitboxes_overlay_banner(&state.shell.metrics));
     }
 
     outer_col.into()
@@ -805,7 +802,7 @@ fn view_separate_window(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<
 // =========================================================================
 
 fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<'_> {
-    let header_height = state.metrics.header_rect.height;
+    let header_height = state.shell.metrics.header_rect.height;
     let is_dark = state.is_dark();
     let bg_color = if is_dark {
         Color::from_rgba(0.12, 0.13, 0.16, state.opacity)
@@ -819,7 +816,7 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
         Color::from_rgb(0.12, 0.13, 0.15)
     };
 
-    let rim_left = state.metrics.rim_insets.left;
+    let rim_left = state.shell.metrics.rim_insets.left;
     let symmetric_margin = ((header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
     let slop = traffic_lights::control_hover_slop(WINDOW_CONTROL_NATIVE_SIZE);
     let leading_spacer_w = (symmetric_margin - slop).max(0.0);
@@ -878,7 +875,7 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
         });
 
     if state.show_hitboxes {
-        column![page_container, view_hitboxes_overlay_banner(&state.metrics)]
+        column![page_container, view_hitboxes_overlay_banner(&state.shell.metrics)]
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
@@ -894,10 +891,10 @@ fn view_unified_single_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElem
 // =========================================================================
 
 fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppElement<'_> {
-    let header_height = state.metrics.header_rect.height;
+    let header_height = state.shell.metrics.header_rect.height;
     let is_dark = state.is_dark();
 
-    let rim_left = state.metrics.rim_insets.left;
+    let rim_left = state.shell.metrics.rim_insets.left;
     let symmetric_margin = ((header_height - WINDOW_CONTROL_NATIVE_SIZE) * 0.5).max(4.0);
     let slop = traffic_lights::control_hover_slop(WINDOW_CONTROL_NATIVE_SIZE);
     let leading_spacer_w = (symmetric_margin - slop).max(0.0);
@@ -1023,7 +1020,7 @@ fn view_unified_multi_pane(state: &DemoState, _plan: ChromeDrawPlan) -> AppEleme
         .height(Length::Fill);
 
     if state.show_hitboxes {
-        column![outer_row, view_hitboxes_overlay_banner(&state.metrics)]
+        column![outer_row, view_hitboxes_overlay_banner(&state.shell.metrics)]
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
@@ -1316,7 +1313,7 @@ fn view_tab_architecture(state: &DemoState) -> AppElement<'_> {
 }
 
 fn view_tab_hitboxes_and_layout(state: &DemoState) -> AppElement<'_> {
-    let metrics = &state.metrics;
+    let metrics = &state.shell.metrics;
 
     let card_toggle = card(
         "Collision Hitboxes & Insets Inspector",
@@ -1698,20 +1695,20 @@ mod tests {
         // 1. Dark mode invariants
         state.theme_preference = super::ThemePreference::Dark;
         state.update_metrics();
-        assert_eq!(state.metrics.rim_insets.left, 2.0);
-        let dark_spacer = (4.0 - state.metrics.rim_insets.left).max(0.0);
+        assert_eq!(state.shell.metrics.rim_insets.left, 2.0);
+        let dark_spacer = (4.0 - state.shell.metrics.rim_insets.left).max(0.0);
         assert_eq!(dark_spacer, 2.0);
         let slop = 6.0;
-        let dark_red_left_dist = state.metrics.rim_insets.left + dark_spacer + slop;
+        let dark_red_left_dist = state.shell.metrics.rim_insets.left + dark_spacer + slop;
         assert_eq!(dark_red_left_dist, 10.0, "Red light leftmost edge must be strictly 10.0 px from window left in dark mode");
 
         // 2. Light mode invariants
         state.theme_preference = super::ThemePreference::Light;
         state.update_metrics();
-        assert_eq!(state.metrics.rim_insets.left, 1.0);
-        let light_spacer = (4.0 - state.metrics.rim_insets.left).max(0.0);
+        assert_eq!(state.shell.metrics.rim_insets.left, 1.0);
+        let light_spacer = (4.0 - state.shell.metrics.rim_insets.left).max(0.0);
         assert_eq!(light_spacer, 3.0);
-        let light_red_left_dist = state.metrics.rim_insets.left + light_spacer + slop;
+        let light_red_left_dist = state.shell.metrics.rim_insets.left + light_spacer + slop;
         assert_eq!(light_red_left_dist, 10.0, "Red light leftmost edge must be strictly 10.0 px from window left in light mode");
 
         // 3. Traffic lights gap invariant (strictly 9.0 px)
