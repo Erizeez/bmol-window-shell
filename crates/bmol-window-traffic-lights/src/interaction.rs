@@ -146,6 +146,65 @@ pub fn reset_groups() {
     );
 }
 
+/// Compatibility: writes one control's press scale directly.
+///
+/// A host that advances its own press spring can push the resulting value
+/// instead of publishing a whole [`TrafficLightsState`]. Prefer
+/// [`publish_group`]; this exists so a compositor that owns the spring keeps
+/// working without a second copy of the state machine.
+pub fn set_window_control_scale(id: GlassId, scale: f32) {
+    with_frame(
+        |frame| {
+            if let Some(slot) = window_control_slot_index(id) {
+                frame.groups[slot / GROUP_LEN][slot % GROUP_LEN].scale = scale.clamp(0.85, 1.30);
+            }
+        },
+        (),
+    );
+}
+
+/// Compatibility: writes one control's press tint directly.
+pub fn set_window_control_press_progress(id: GlassId, press: f32) {
+    with_frame(
+        |frame| {
+            if let Some(slot) = window_control_slot_index(id) {
+                frame.groups[slot / GROUP_LEN][slot % GROUP_LEN].press = press.clamp(0.0, 1.0);
+            }
+        },
+        (),
+    );
+}
+
+/// Compatibility: writes one group's glyph reveal directly.
+pub fn set_window_control_group_progress(group_index: usize, progress: f32) {
+    with_frame(
+        |frame| {
+            if let Some(group) = frame.groups.get_mut(group_index) {
+                let progress = progress.clamp(0.0, 1.0);
+                for value in group.iter_mut() {
+                    value.hover = progress;
+                }
+            }
+        },
+        (),
+    );
+}
+
+/// Compatibility: sets one group's reveal from a hover flag.
+pub fn set_window_control_group_hover(group_index: usize, hovered: bool) {
+    set_window_control_group_progress(group_index, if hovered { 1.0 } else { 0.0 });
+}
+
+/// Compatibility: the reveal a group is heading towards.
+///
+/// The frame only carries the resolved reveal, so this reports it as the
+/// target too. A host that animates its own reveal toward this value will
+/// simply reach it faster than it would against a separate target.
+#[must_use]
+pub fn window_control_group_hover_target(id: GlassId) -> f32 {
+    window_control_group_progress(id).unwrap_or(0.0)
+}
+
 /// Takes one consistent frame for the compositor.
 #[must_use]
 pub fn snapshot() -> TrafficLightsFrame {

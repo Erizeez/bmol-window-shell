@@ -100,11 +100,12 @@ pub use scene::{
 pub use interaction::{
     SLOT_COUNT, TrafficLightInteraction, TrafficLightsFrame, active_window_control_origin,
     active_window_control_tuning, all_window_control_ids, group_index_for_raw_id, publish_group,
-    publish_groups, reset_groups, set_window_control_origin, set_window_control_tuning,
-    slot_index_for_raw_id, snapshot,
-    window_control_group_ids, window_control_group_index, window_control_group_progress,
-    window_control_interaction, window_control_press_progress, window_control_scale,
-    window_control_slot_index,
+    publish_groups, reset_groups, set_window_control_group_hover,
+    set_window_control_group_progress, set_window_control_origin,
+    set_window_control_press_progress, set_window_control_scale, set_window_control_tuning,
+    slot_index_for_raw_id, snapshot, window_control_group_hover_target, window_control_group_ids,
+    window_control_group_index, window_control_group_progress, window_control_interaction,
+    window_control_press_progress, window_control_scale, window_control_slot_index,
 };
 
 #[cfg(feature = "iced")]
