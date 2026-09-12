@@ -144,34 +144,15 @@ const SAMPLES: [Sample; 5] = [
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum TuningParameter {
     BlurRadius,
-    InternalScattering,
-    SideEdgeDarkness,
-    SideEdgeWidth,
     Opacity,
-    SubstrateCoverage,
-    LowerSubstrateCoverage,
-    LowerTintCoverage,
-    AngularLight,
-    LightAngle,
-    LightSoftness,
-    BodyThickness,
-    EdgeSideBias,
-    EdgeSideAngle,
     RefractionStrength,
     FresnelStrength,
     HoverGain,
     PressGain,
     PressLift,
-    UniformLight,
-    ThinLightGain,
-    CoreLift,
-    AxialGlow,
-    CorePower,
-    VerticalPower,
-    HorizontalPower,
-    LateralPower,
-    VerticalFloor,
-    GrazingPower,
+    BeadB1,
+    BeadB2,
+    BeadB3,
     BeadCenterGlow,
     BeadSaturationLift,
     BeadHighlight,
@@ -344,21 +325,7 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
         Message::TuningChanged { parameter, value } => {
             match parameter {
                 TuningParameter::BlurRadius => state.tuning.blur_radius = value,
-                TuningParameter::InternalScattering => state.tuning.internal_scattering = value,
-                TuningParameter::SideEdgeDarkness => state.tuning.side_edge_darkness = value,
-                TuningParameter::SideEdgeWidth => state.tuning.side_edge_width = value,
                 TuningParameter::Opacity => state.tuning.opacity = value,
-                TuningParameter::SubstrateCoverage => state.tuning.substrate_coverage = value,
-                TuningParameter::LowerSubstrateCoverage => {
-                    state.tuning.lower_substrate_coverage = value;
-                }
-                TuningParameter::LowerTintCoverage => state.tuning.lower_tint_coverage = value,
-                TuningParameter::AngularLight => state.tuning.angular_light = value,
-                TuningParameter::LightAngle => state.tuning.light_angle = value,
-                TuningParameter::LightSoftness => state.tuning.light_softness = value,
-                TuningParameter::BodyThickness => state.tuning.body_thickness = value,
-                TuningParameter::EdgeSideBias => state.tuning.edge_side_bias = value,
-                TuningParameter::EdgeSideAngle => state.tuning.edge_side_angle = value,
                 TuningParameter::RefractionStrength => {
                     state.tuning.refraction_strength = value;
                 }
@@ -366,16 +333,9 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
                 TuningParameter::HoverGain => state.tuning.hover_gain = value,
                 TuningParameter::PressGain => state.tuning.press_gain = value,
                 TuningParameter::PressLift => state.tuning.press_lift = value,
-                TuningParameter::UniformLight => state.tuning.uniform_light = value,
-                TuningParameter::ThinLightGain => state.tuning.thin_light_gain = value,
-                TuningParameter::CoreLift => state.tuning.core_lift = value,
-                TuningParameter::AxialGlow => state.tuning.axial_glow = value,
-                TuningParameter::CorePower => state.tuning.core_power = value,
-                TuningParameter::VerticalPower => state.tuning.vertical_power = value,
-                TuningParameter::HorizontalPower => state.tuning.horizontal_power = value,
-                TuningParameter::LateralPower => state.tuning.lateral_power = value,
-                TuningParameter::VerticalFloor => state.tuning.vertical_floor = value,
-                TuningParameter::GrazingPower => state.tuning.grazing_power = value,
+                TuningParameter::BeadB1 => state.tuning.bead_b1 = value,
+                TuningParameter::BeadB2 => state.tuning.bead_b2 = value,
+                TuningParameter::BeadB3 => state.tuning.bead_b3 = value,
                 TuningParameter::BeadCenterGlow => state.tuning.bead_center_glow = value,
                 TuningParameter::BeadSaturationLift => state.tuning.bead_saturation_lift = value,
                 TuningParameter::BeadHighlight => state.tuning.bead_highlight_intensity = value,
@@ -533,64 +493,42 @@ fn configuration_text(state: &State) -> String {
 scheme = {scheme}\n\
 document_edited = {edited}\n\
 blur_radius = {blur_radius:.2}\n\
-internal_scattering = {internal_scattering:.4}\n\
-side_edge_darkness = {side_edge_darkness:.4}\n\
-side_edge_width = {side_edge_width:.4}\n\
 opacity = {opacity:.4}\n\
-substrate_coverage = {substrate_coverage:.4}\n\
-lower_substrate_coverage = {lower_substrate_coverage:.4}\n\
-lower_tint_coverage = {lower_tint_coverage:.4}\n\
-angular_light = {angular_light:.4}\n\
-light_angle = {light_angle:.4}\n\
-light_softness = {light_softness:.4}\n\
-body_thickness = {body_thickness:.4}\n\
-edge_side_bias = {edge_side_bias:.4}\n\
-edge_side_angle = {edge_side_angle:.2}\n\
 refraction_strength = {refraction_strength:.4}\n\
 fresnel_strength = {fresnel_strength:.4}\n\
 hover_gain = {hover_gain:.4}\n\
 press_gain = {press_gain:.4}\n\
 press_lift = {press_lift:.4}\n\
-uniform_light = {uniform_light:.4}\n\
-thin_light_gain = {thin_light_gain:.4}\n\
-core_lift = {core_lift:.4}\n\
-axial_glow = {axial_glow:.4}\n\
-core_power = {core_power:.4}\n\
-vertical_power = {vertical_power:.4}\n\
-horizontal_power = {horizontal_power:.4}\n\
-lateral_power = {lateral_power:.4}\n\
-vertical_floor = {vertical_floor:.4}\n\
-grazing_power = {grazing_power:.4}\n",
+bead_b1 = {bead_b1:.4}\n\
+bead_b2 = {bead_b2:.4}\n\
+bead_b3 = {bead_b3:.4}\n\
+bead_center_glow = {bead_center_glow:.4}\n\
+bead_saturation_lift = {bead_saturation_lift:.4}\n\
+bead_highlight_intensity = {bead_highlight_intensity:.4}\n\
+bead_dark_rim_intensity = {bead_dark_rim_intensity:.4}\n\
+bead_core_span_factor = {bead_core_span_factor:.4}\n\
+bead_rim_span_factor = {bead_rim_span_factor:.4}\n\
+bead_caustic_light = {bead_caustic_light:.4}\n\
+bead_caustic_dark = {bead_caustic_dark:.4}\n",
         edited = state.document_edited,
         blur_radius = tuning.blur_radius,
-        internal_scattering = tuning.internal_scattering,
-        side_edge_darkness = tuning.side_edge_darkness,
-        side_edge_width = tuning.side_edge_width,
         opacity = tuning.opacity,
-        substrate_coverage = tuning.substrate_coverage,
-        lower_substrate_coverage = tuning.lower_substrate_coverage,
-        lower_tint_coverage = tuning.lower_tint_coverage,
-        angular_light = tuning.angular_light,
-        light_angle = tuning.light_angle,
-        light_softness = tuning.light_softness,
-        body_thickness = tuning.body_thickness,
-        edge_side_bias = tuning.edge_side_bias,
-        edge_side_angle = tuning.edge_side_angle,
         refraction_strength = tuning.refraction_strength,
         fresnel_strength = tuning.fresnel_strength,
         hover_gain = tuning.hover_gain,
         press_gain = tuning.press_gain,
         press_lift = tuning.press_lift,
-        uniform_light = tuning.uniform_light,
-        thin_light_gain = tuning.thin_light_gain,
-        core_lift = tuning.core_lift,
-        axial_glow = tuning.axial_glow,
-        core_power = tuning.core_power,
-        vertical_power = tuning.vertical_power,
-        horizontal_power = tuning.horizontal_power,
-        lateral_power = tuning.lateral_power,
-        vertical_floor = tuning.vertical_floor,
-        grazing_power = tuning.grazing_power,
+        bead_b1 = tuning.bead_b1,
+        bead_b2 = tuning.bead_b2,
+        bead_b3 = tuning.bead_b3,
+        bead_center_glow = tuning.bead_center_glow,
+        bead_saturation_lift = tuning.bead_saturation_lift,
+        bead_highlight_intensity = tuning.bead_highlight_intensity,
+        bead_dark_rim_intensity = tuning.bead_dark_rim_intensity,
+        bead_core_span_factor = tuning.bead_core_span_factor,
+        bead_rim_span_factor = tuning.bead_rim_span_factor,
+        bead_caustic_light = tuning.bead_caustic_light,
+        bead_caustic_dark = tuning.bead_caustic_dark,
     )
 }
 
@@ -605,128 +543,23 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             |value| Message::TuningChanged { parameter: TuningParameter::BlurRadius, value },
         ),
         components::setting_slider_with_step(
-            "Internal scattering",
-            format!("{:.0}%", tuning.internal_scattering * 100.0),
-            tuning.internal_scattering,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged {
-                parameter: TuningParameter::InternalScattering,
-                value,
-            },
-        ),
-        components::setting_slider_with_step(
-            "Edge darkness",
-            format!("{:.2}", tuning.side_edge_darkness),
-            tuning.side_edge_darkness,
-            0.0..=4.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::SideEdgeDarkness, value },
-        ),
-        components::setting_slider_with_step(
-            "Edge width",
-            format!("{:.2}×", tuning.side_edge_width),
-            tuning.side_edge_width,
-            0.5..=4.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::SideEdgeWidth, value },
-        ),
-        components::setting_slider_with_step(
             "Opacity",
             format!("{:.0}%", tuning.opacity * 100.0),
-            tuning.opacity,
+            tuning.opacity * 100.0,
             0.0..=1.0,
             0.01,
             |value| Message::TuningChanged { parameter: TuningParameter::Opacity, value },
         ),
         components::setting_slider_with_step(
-            "Upper substrate",
-            format!("{:.0}%", tuning.substrate_coverage * 100.0),
-            tuning.substrate_coverage,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::SubstrateCoverage, value },
-        ),
-        components::setting_slider_with_step(
-            "Lower substrate",
-            format!("{:.0}%", tuning.lower_substrate_coverage * 100.0),
-            tuning.lower_substrate_coverage,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged {
-                parameter: TuningParameter::LowerSubstrateCoverage,
-                value,
-            },
-        ),
-        components::setting_slider_with_step(
-            "Lower tint coverage",
-            format!("{:.0}%", tuning.lower_tint_coverage * 100.0),
-            tuning.lower_tint_coverage,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::LowerTintCoverage, value },
-        ),
-        components::setting_slider_with_step(
-            "Angular light",
-            format!("{:.1}%", tuning.angular_light * 100.0),
-            tuning.angular_light,
-            0.0..=0.15,
-            0.001,
-            |value| Message::TuningChanged { parameter: TuningParameter::AngularLight, value },
-        ),
-        components::setting_slider_with_step(
-            "Light angle",
-            format!("{:.0}°", tuning.light_angle * 90.0),
-            tuning.light_angle,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::LightAngle, value },
-        ),
-        components::setting_slider_with_step(
-            "Light softness",
-            format!("{:.0}%", tuning.light_softness * 100.0),
-            tuning.light_softness,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::LightSoftness, value },
-        ),
-        components::setting_slider_with_step(
-            "Body thickness",
-            format!("{:.2}×", tuning.body_thickness),
-            tuning.body_thickness,
-            0.4..=2.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::BodyThickness, value },
-        ),
-        components::setting_slider_with_step(
-            "Edge side bias",
-            format!("{:.0}%", tuning.edge_side_bias * 100.0),
-            tuning.edge_side_bias,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::EdgeSideBias, value },
-        ),
-        components::setting_slider_with_step(
-            "Side thickness sigma",
-            format!("{:.0}° σ", tuning.edge_side_angle),
-            tuning.edge_side_angle,
-            10.0..=80.0,
-            1.0,
-            |value| Message::TuningChanged { parameter: TuningParameter::EdgeSideAngle, value },
-        ),
-        components::setting_slider_with_step(
-            "Refraction",
+            "Refraction strength",
             format!("{:.2}", tuning.refraction_strength),
             tuning.refraction_strength,
             0.0..=1.0,
             0.01,
-            |value| Message::TuningChanged {
-                parameter: TuningParameter::RefractionStrength,
-                value,
-            },
+            |value| Message::TuningChanged { parameter: TuningParameter::RefractionStrength, value },
         ),
         components::setting_slider_with_step(
-            "Fresnel edge",
+            "Fresnel strength",
             format!("{:.2}", tuning.fresnel_strength),
             tuning.fresnel_strength,
             0.0..=1.0,
@@ -734,111 +567,55 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             |value| Message::TuningChanged { parameter: TuningParameter::FresnelStrength, value },
         ),
         components::setting_slider_with_step(
-            "Hover gain (whole control)",
-            format!("{:.0}%", tuning.hover_gain * 100.0),
+            "Hover gain",
+            format!("{:.2}", tuning.hover_gain),
             tuning.hover_gain,
             0.0..=1.0,
             0.01,
             |value| Message::TuningChanged { parameter: TuningParameter::HoverGain, value },
         ),
         components::setting_slider_with_step(
-            "Press gain (whole control)",
-            format!("{:.0}%", tuning.press_gain * 100.0),
+            "Press gain",
+            format!("{:.2}", tuning.press_gain),
             tuning.press_gain,
             0.0..=1.0,
             0.01,
             |value| Message::TuningChanged { parameter: TuningParameter::PressGain, value },
         ),
         components::setting_slider_with_step(
-            "Press tint lift",
-            format!("{:.0}%", tuning.press_lift * 100.0),
+            "Press lift",
+            format!("{:.2}", tuning.press_lift),
             tuning.press_lift,
             0.0..=1.0,
             0.01,
             |value| Message::TuningChanged { parameter: TuningParameter::PressLift, value },
         ),
         components::setting_slider_with_step(
-            "Centre light (uniform)",
-            format!("{:.3}", tuning.uniform_light),
-            tuning.uniform_light,
-            0.0..=0.60,
-            0.005,
-            |value| Message::TuningChanged { parameter: TuningParameter::UniformLight, value },
+            "Droplet b1",
+            format!("{:.2}", tuning.bead_b1),
+            tuning.bead_b1,
+            0.0..=2.0,
+            0.01,
+            |value| Message::TuningChanged { parameter: TuningParameter::BeadB1, value },
         ),
         components::setting_slider_with_step(
-            "Centre light (lower)",
-            format!("{:.3}", tuning.thin_light_gain),
-            tuning.thin_light_gain,
-            0.0..=0.60,
-            0.005,
-            |value| Message::TuningChanged { parameter: TuningParameter::ThinLightGain, value },
+            "Droplet b2",
+            format!("{:.2}", tuning.bead_b2),
+            tuning.bead_b2,
+            0.0..=2.0,
+            0.01,
+            |value| Message::TuningChanged { parameter: TuningParameter::BeadB2, value },
         ),
         components::setting_slider_with_step(
-            "Core lift (droplet centre)",
-            format!("{:.0}%", tuning.core_lift * 100.0),
-            tuning.core_lift,
+            "Droplet b3",
+            format!("{:.2}", tuning.bead_b3),
+            tuning.bead_b3,
             0.0..=1.0,
             0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::CoreLift, value },
+            |value| Message::TuningChanged { parameter: TuningParameter::BeadB3, value },
         ),
         components::setting_slider_with_step(
-            "Axial glow",
-            format!("{:.0}%", tuning.axial_glow * 100.0),
-            tuning.axial_glow,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::AxialGlow, value },
-        ),
-        components::setting_slider_with_step(
-            "Core profile power",
-            format!("{:.1}", tuning.core_power),
-            tuning.core_power,
-            1.0..=8.0,
-            0.1,
-            |value| Message::TuningChanged { parameter: TuningParameter::CorePower, value },
-        ),
-        components::setting_slider_with_step(
-            "Vertical power",
-            format!("{:.2}", tuning.vertical_power),
-            tuning.vertical_power,
-            0.25..=4.0,
-            0.05,
-            |value| Message::TuningChanged { parameter: TuningParameter::VerticalPower, value },
-        ),
-        components::setting_slider_with_step(
-            "Horizontal roll-off",
-            format!("{:.2}", tuning.horizontal_power),
-            tuning.horizontal_power,
-            0.05..=2.0,
-            0.05,
-            |value| Message::TuningChanged { parameter: TuningParameter::HorizontalPower, value },
-        ),
-        components::setting_slider_with_step(
-            "Rim lateral power",
-            format!("{:.2}", tuning.lateral_power),
-            tuning.lateral_power,
-            0.25..=16.0,
-            0.25,
-            |value| Message::TuningChanged { parameter: TuningParameter::LateralPower, value },
-        ),
-        components::setting_slider_with_step(
-            "Rim vertical floor",
-            format!("{:.0}%", tuning.vertical_floor * 100.0),
-            tuning.vertical_floor,
-            0.0..=1.0,
-            0.01,
-            |value| Message::TuningChanged { parameter: TuningParameter::VerticalFloor, value },
-        ),
-        components::setting_slider_with_step(
-            "Rim grazing power",
-            format!("{:.2}", tuning.grazing_power),
-            tuning.grazing_power,
-            0.1..=4.0,
-            0.05,
-            |value| Message::TuningChanged { parameter: TuningParameter::GrazingPower, value },
-        ),
-        components::setting_slider_with_step(
-            "Bead centre glow",
+            "Centre glow",
             format!("{:.2}", tuning.bead_center_glow),
             tuning.bead_center_glow,
             0.0..=2.0,
@@ -846,15 +623,15 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             |value| Message::TuningChanged { parameter: TuningParameter::BeadCenterGlow, value },
         ),
         components::setting_slider_with_step(
-            "Bead saturation lift",
+            "Saturation lift",
             format!("{:.2}", tuning.bead_saturation_lift),
             tuning.bead_saturation_lift,
             0.0..=0.5,
-            0.005,
+            0.01,
             |value| Message::TuningChanged { parameter: TuningParameter::BeadSaturationLift, value },
         ),
         components::setting_slider_with_step(
-            "Bead highlight (dark)",
+            "Highlight (dark)",
             format!("{:.2}", tuning.bead_highlight_intensity),
             tuning.bead_highlight_intensity,
             0.0..=2.0,
@@ -862,7 +639,7 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             |value| Message::TuningChanged { parameter: TuningParameter::BeadHighlight, value },
         ),
         components::setting_slider_with_step(
-            "Bead dark rim (light)",
+            "Dark rim (light)",
             format!("{:.2}", tuning.bead_dark_rim_intensity),
             tuning.bead_dark_rim_intensity,
             0.0..=3.0,
@@ -870,23 +647,23 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             |value| Message::TuningChanged { parameter: TuningParameter::BeadDarkRim, value },
         ),
         components::setting_slider_with_step(
-            "Bead core span",
-            format!("{:.2}", tuning.bead_core_span_factor),
+            "Bright-edge span",
+            format!("{:.2}×", tuning.bead_core_span_factor),
             tuning.bead_core_span_factor,
             0.5..=2.0,
             0.01,
             |value| Message::TuningChanged { parameter: TuningParameter::BeadCoreSpan, value },
         ),
         components::setting_slider_with_step(
-            "Bead rim span",
-            format!("{:.2}", tuning.bead_rim_span_factor),
+            "Dark-rim span",
+            format!("{:.2}×", tuning.bead_rim_span_factor),
             tuning.bead_rim_span_factor,
             0.5..=2.0,
             0.01,
             |value| Message::TuningChanged { parameter: TuningParameter::BeadRimSpan, value },
         ),
         components::setting_slider_with_step(
-            "Bead caustic (light)",
+            "Caustic (light)",
             format!("{:.2}", tuning.bead_caustic_light),
             tuning.bead_caustic_light,
             0.0..=2.0,
@@ -894,7 +671,7 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             |value| Message::TuningChanged { parameter: TuningParameter::BeadCausticLight, value },
         ),
         components::setting_slider_with_step(
-            "Bead caustic (dark)",
+            "Caustic (dark)",
             format!("{:.2}", tuning.bead_caustic_dark),
             tuning.bead_caustic_dark,
             0.0..=2.0,
@@ -905,7 +682,7 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
 
     container(
         column![
-            text("Physical material tuning")
+            text("Bead material tuning")
                 .size(font::size::TITLE)
                 .font(font::ui_font(iced::font::Weight::Semibold)),
             text("Applies to every traffic-light sample")

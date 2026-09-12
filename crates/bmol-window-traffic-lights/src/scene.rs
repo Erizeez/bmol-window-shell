@@ -5,8 +5,8 @@
 //! spheres and the Iced glyph layer are always driven by the same numbers.
 
 use liquid_glass_scene::{
-    BeadStyle, Color, CoreLight, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
-    GlassVariant, InteractionResponse, Rect, RimProfile, TrafficLightStyle,
+    BeadStyle, Color, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
+    GlassVariant, InteractionResponse, Rect,
 };
 
 use crate::interaction::{
@@ -75,20 +75,6 @@ pub fn traffic_light_material(
         mode_dark: if is_dark { 1.0 } else { 0.0 },
     };
     material.blur.radius = fields.blur_radius;
-    material.traffic_light = TrafficLightStyle {
-        substrate_coverage: fields.style.substrate_coverage,
-        lower_substrate_coverage: fields.style.lower_substrate_coverage,
-        lower_tint_coverage: fields.style.lower_tint_coverage,
-        angular_light: fields.style.angular_light,
-        light_angle: fields.style.light_angle,
-        light_softness: fields.style.light_softness,
-        body_thickness: fields.style.body_thickness,
-        internal_scattering: fields.style.internal_scattering,
-        side_edge_darkness: fields.style.side_edge_darkness,
-        side_edge_width: fields.style.side_edge_width,
-        edge_side_bias: fields.style.edge_side_bias,
-        edge_side_angle: fields.style.edge_side_angle,
-    };
     material.tint = Color::rgba(fields.tint[0], fields.tint[1], fields.tint[2], fields.tint[3]);
     // Pointer engagement and centre light travel through the material, so a
     // playground can tune them without the shader knowing about tuning structs.
@@ -96,20 +82,6 @@ pub fn traffic_light_material(
         hover_gain: fields.interaction[0],
         press_gain: fields.interaction[1],
         press_lift: fields.interaction[2],
-    };
-    material.core_light = CoreLight {
-        uniform_light: fields.core_light[0],
-        thin_light_gain: fields.core_light[1],
-        core_lift: fields.core_light[2],
-        axial_glow: fields.core_light[3],
-        core_power: fields.core_light[4],
-        vertical_power: fields.core_light[5],
-        horizontal_power: fields.core_light[6],
-    };
-    material.rim_profile = RimProfile {
-        lateral_power: fields.rim_profile[0],
-        vertical_floor: fields.rim_profile[1],
-        grazing_power: fields.rim_profile[2],
     };
     material.refraction.strength = fields.refraction_strength;
     material.fresnel.strength = fields.fresnel_strength;

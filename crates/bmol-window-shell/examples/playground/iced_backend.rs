@@ -1535,19 +1535,7 @@ mod tests {
         let tuning = WindowControlTuning::for_scheme(true);
 
         assert_eq!(tuning.blur_radius, 17.0);
-        assert_eq!(tuning.internal_scattering, 1.0);
-        assert_eq!(tuning.side_edge_darkness, 0.0);
-        assert_eq!(tuning.side_edge_width, 0.5);
         assert_eq!(tuning.opacity, 1.0);
-        assert_eq!(tuning.substrate_coverage, 0.88);
-        assert_eq!(tuning.lower_substrate_coverage, 0.54);
-        assert_eq!(tuning.lower_tint_coverage, 0.66);
-        assert_eq!(tuning.angular_light, 0.055);
-        assert_eq!(tuning.light_angle, 0.52);
-        assert_eq!(tuning.light_softness, 1.0);
-        assert_eq!(tuning.body_thickness, 0.79);
-        assert_eq!(tuning.edge_side_bias, 1.0);
-        assert_eq!(tuning.edge_side_angle, 23.0);
         assert_eq!(tuning.refraction_strength, 0.0);
         assert_eq!(tuning.fresnel_strength, 0.39);
     }

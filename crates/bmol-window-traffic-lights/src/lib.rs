@@ -90,7 +90,7 @@ pub use state::{
     TrafficLightSlot, TrafficLightsEvent, TrafficLightsState,
 };
 
-pub use tuning::{TrafficLightMaterialFields, TrafficLightStyleFields, WindowControlTuning};
+pub use tuning::{TrafficLightMaterialFields, WindowControlTuning};
 
 pub use scene::{
     group_hover, push_traffic_light_group, scale_scene, sphere_bounds, traffic_light_material,
