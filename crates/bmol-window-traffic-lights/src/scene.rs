@@ -97,6 +97,14 @@ pub fn traffic_light_material(
     material
 }
 
+/// Centre-light share of the secondary controls (yellow and green).
+///
+/// Measured from the reference appearance: red carries the full centre glow
+/// while yellow and green reach only this fraction of it. The reference bakes
+/// this share into every state, so it is a property of the control rather than
+/// of the pointer response.
+pub const TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE: f32 = 0.6;
+
 /// Bounds of control `index` inside a group, given its current press scale.
 ///
 /// The sphere grows about the circle's centre: the visual diameter scales and
@@ -149,9 +157,19 @@ pub fn push_traffic_light_group(
         let display_color =
             if inactive { blend_color(base_color, active_color, focus) } else { base_color };
 
+        // The reference appearance does not give every control the same centre
+        // light: red carries the full glow while yellow and green stop at 60%
+        // of it. That share is a property of the resting control -- it applies
+        // in every state, hover and press alike -- so it scales the centre
+        // light rather than the pointer response.
+        let glow_share = if index == 0 { 1.0 } else { TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE };
+        let mut material = traffic_light_material(display_color, inactive, tuning, focus);
+        material.core_light.core_lift *= glow_share;
+        material.core_light.axial_glow *= glow_share;
+
         let mut node = GlassNode::new(id, bounds)
             .shape(GlassShape::Circle)
-            .material(traffic_light_material(display_color, inactive, tuning, focus))
+            .material(material)
             .interaction(interaction);
         node.z_index = 40;
         scene.push(node);
@@ -307,6 +325,49 @@ mod tests {
         assert!(pressed.width > 64.0, "the pressed sphere must be scaled up");
         assert!(pressed.width < 64.0 * 1.2);
         assert_eq!(nodes[1].bounds.width, 64.0);
+        reset_groups();
+    }
+
+    #[test]
+    fn only_red_carries_the_full_centre_glow() {
+        reset_groups();
+        let mut state = TrafficLightsState::new();
+        state.on_group_hover(true);
+        publish_group(0, &state);
+
+        let mut scene = GlassScene::default();
+        push_traffic_light_group(
+            &mut scene,
+            &WINDOW_CONTROL_GROUPS[0].1,
+            10.0,
+            18.0,
+            14.0,
+            9.0,
+            false,
+            false,
+            false,
+            WindowControlTuning::default(),
+            &[],
+        );
+
+        let nodes = scene.nodes();
+        let base = WindowControlTuning::default().core_lift;
+        let expected = base * TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE;
+
+        let red = nodes[0].material.core_light.core_lift;
+        let yellow = nodes[1].material.core_light.core_lift;
+        let green = nodes[2].material.core_light.core_lift;
+        assert!((red - base).abs() < 1e-6, "red keeps the full glow: {red} vs {base}");
+        assert!((yellow - expected).abs() < 1e-6, "yellow: {yellow} vs {expected}");
+        assert!((green - expected).abs() < 1e-6, "green: {green} vs {expected}");
+
+        // The pointer response is identical across the group, in every state.
+        for node in nodes {
+            assert!((node.material.interaction.hover_gain - base.max(0.0) * 0.0
+                - WindowControlTuning::default().hover_gain)
+                .abs()
+                < 1e-6);
+        }
         reset_groups();
     }
 
