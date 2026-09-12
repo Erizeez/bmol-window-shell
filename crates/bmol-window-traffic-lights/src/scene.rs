@@ -123,13 +123,14 @@ pub fn traffic_light_material(
     material
 }
 
-/// Centre-light share of the secondary controls (yellow and green).
+/// Resting share of the reference bead's centre glow.
 ///
-/// Measured from the reference appearance: red carries the full centre glow
-/// while yellow and green reach only this fraction of it. The reference bakes
-/// this share into every state, so it is a property of the control rather than
-/// of the pointer response.
-pub const TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE: f32 = 0.6;
+/// Every control rests at this fraction of its centre glow -- red included --
+/// and only red lifts to the full value while the group is hovered. Yellow and
+/// green never rise. B's rasteriser expressed exactly this as a `glow_scale` of
+/// `0.60` for all three in its resting set, and `1.00 / 0.60 / 0.60` in its
+/// hovered set; the pressed set leaves the shares unchanged.
+pub const TRAFFIC_LIGHT_RESTING_GLOW_SHARE: f32 = 0.6;
 
 /// When enabled, the traffic lights render the reference flat bead instead of
 /// physical glass.
@@ -210,12 +211,17 @@ pub fn push_traffic_light_group(
         let display_color =
             if inactive { blend_color(base_color, active_color, focus) } else { base_color };
 
-        // The reference appearance does not give every control the same centre
-        // light: red carries the full glow while yellow and green stop at 60%
-        // of it. That share is a property of the resting control -- it applies
-        // in every state, hover and press alike -- so it scales the centre
-        // light rather than the pointer response.
-        let glow_share = if index == 0 { 1.0 } else { TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE };
+        // All three controls rest at the same centre glow; only red lifts to
+        // the full value once the pointer engages the group. `values.hover` is
+        // the group's hover progress, published identically to every control in
+        // it, so red lifts with the group rather than with its own pointer.
+        let engaged = values.hover.clamp(0.0, 1.0);
+        let glow_share = if index == 0 {
+            TRAFFIC_LIGHT_RESTING_GLOW_SHARE
+                + (1.0 - TRAFFIC_LIGHT_RESTING_GLOW_SHARE) * engaged
+        } else {
+            TRAFFIC_LIGHT_RESTING_GLOW_SHARE
+        };
         let mut material = traffic_light_material(display_color, inactive, is_dark, tuning, focus);
         material.bead.center_glow *= glow_share;
 
@@ -395,7 +401,58 @@ mod tests {
     }
 
     #[test]
-    fn only_red_carries_the_full_centre_glow() {
+    fn only_red_lifts_its_centre_glow_when_the_group_is_hovered() {
+        let base = WindowControlTuning::default().bead_center_glow;
+        let resting = base * TRAFFIC_LIGHT_RESTING_GLOW_SHARE;
+
+        let scene_at = |hovered: bool| {
+            reset_groups();
+            let mut state = TrafficLightsState::new();
+            if hovered {
+                state.on_group_hover(true);
+                for _ in 0..120 {
+                    state.advance(1.0 / 60.0);
+                }
+            }
+            publish_group(0, &state);
+
+            let mut scene = GlassScene::default();
+            push_traffic_light_group(
+                &mut scene,
+                &WINDOW_CONTROL_GROUPS[0].1,
+                10.0,
+                18.0,
+                14.0,
+                9.0,
+                false,
+                false,
+                false,
+                WindowControlTuning::default(),
+                &[],
+            );
+            reset_groups();
+            let glow: Vec<f32> =
+                scene.nodes().iter().map(|node| node.material.bead.center_glow).collect();
+            assert_eq!(glow.len(), 3);
+            glow
+        };
+
+        // Not focused: all three carry exactly the same centre light.
+        let resting_glow = scene_at(false);
+        for glow in &resting_glow {
+            assert!((glow - resting).abs() < 1e-5, "resting: {glow} vs {resting}");
+        }
+
+        // Focused: only red rises, and only as far as the full value.
+        let hovered = scene_at(true);
+        assert!((hovered[0] - base).abs() < 1e-4, "red lifts to the full glow: {} vs {base}", hovered[0]);
+        for glow in &hovered[1..] {
+            assert!((glow - resting).abs() < 1e-5, "secondary stays put: {glow} vs {resting}");
+        }
+    }
+
+    #[test]
+    fn the_pointer_response_is_identical_across_the_group() {
         reset_groups();
         let mut state = TrafficLightsState::new();
         state.on_group_hover(true);
@@ -416,23 +473,11 @@ mod tests {
             &[],
         );
 
-        let nodes = scene.nodes();
-        let base = WindowControlTuning::default().bead_center_glow;
-        let expected = base * TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE;
-
-        let red = nodes[0].material.bead.center_glow;
-        let yellow = nodes[1].material.bead.center_glow;
-        let green = nodes[2].material.bead.center_glow;
-        assert!((red - base).abs() < 1e-6, "red keeps the full glow: {red} vs {base}");
-        assert!((yellow - expected).abs() < 1e-6, "yellow: {yellow} vs {expected}");
-        assert!((green - expected).abs() < 1e-6, "green: {green} vs {expected}");
-
-        // The pointer response is identical across the group, in every state.
-        for node in nodes {
-            assert!((node.material.interaction.hover_gain - base.max(0.0) * 0.0
-                - WindowControlTuning::default().hover_gain)
-                .abs()
-                < 1e-6);
+        let tuning = WindowControlTuning::default();
+        for node in scene.nodes() {
+            assert!((node.material.interaction.hover_gain - tuning.hover_gain).abs() < 1e-6);
+            assert!((node.material.interaction.press_gain - tuning.press_gain).abs() < 1e-6);
+            assert!((node.material.interaction.press_lift - tuning.press_lift).abs() < 1e-6);
         }
         reset_groups();
     }

@@ -557,3 +557,70 @@ raw[idx] = (final_r * 255.0).round()             // 写成 sRGB 字节
 
 `2cc81a3`（我误将你的 content-glass WIP 用错误消息提交并推送）—— 按你的决定**保留现状**，
 不改写历史。
+
+### 6.9 中心光份额：我实现反了（按你的更正修正）
+
+你指出"非聚焦情况光感 3 个是一样的"。回查 B 的 `regenerate_beads`，`glow_scale` 的
+真实分配是：
+
+| 状态 | 红 | 黄 | 绿 |
+|---|---|---|---|
+| `beads_*_norm`（静止） | **0.60** | 0.60 | 0.60 |
+| `beads_*_hov`（组 hover） | **1.00** | 0.60 | 0.60 |
+| `beads_*_pressed` | **1.00** | 0.60 | 0.60 |
+| `beads_*_inactive`（灰） | 0.60 | 0.60 | 0.60 |
+
+`physical_control_group` 用**组级** `hover_amount > 0.05` 在 `norm` / `hov` 之间切换
+（B 源码注释：*"Red lifts to 100% center glow, Yellow/Green stay at 60%"*）；按下时只有被按的
+那一颗换成 `pressed_handles[i]`，但按下版的份额与 hover 版**完全相同**（只有 `hover_amount`
+从 0 变 1）。所以净效果是：
+
+> **0.60 是全体静止基准；只有红灯在组 hover 时抬到 1.00。黄绿永不抬升。**
+
+我原先写成"红恒 1.0、黄绿恒 0.6"，两个方向都错。已改为
+
+```rust
+let engaged = values.hover;   // 组级 hover，interaction.rs 把 state.hover_progress 发给组内每颗
+let glow_share = if index == 0 {
+    RESTING + (1.0 - RESTING) * engaged      // 红：0.60 → 1.00
+} else {
+    RESTING                                   // 黄绿：恒 0.60
+};
+```
+
+常量 `TRAFFIC_LIGHT_SECONDARY_GLOW_SHARE` 随之更名 `TRAFFIC_LIGHT_RESTING_GLOW_SHARE`。
+测试 `only_red_lifts_its_centre_glow_when_the_group_is_hovered` 覆盖静止 / hover 两态；
+原先被合并掉的"指针响应全组一致"不变量恢复为独立测试。
+
+**注意**：这一项只作用于 bead（`material.bead.center_glow`）。physical 变体用 `core_light`
+且三颗本来就相同，所以你说的"非聚焦时三颗一样"在 physical 上本来就是成立的。
+
+### 6.10 用你的默认参数做精确手算校验
+
+你贴的默认值与本仓库 `WindowControlTuning::new()` **逐项一致**（已核对）。
+bead 默认：`center_glow 1.0 / saturation_lift 0.25 / dark_rim 2.0 / highlight 0.85 /
+span factors 1.0 / caustic 1.10(light) 0.80(dark)`。
+
+静止态盘心（`glow_share = 0.6`）：
+
+```
+glow      = 0.6 × 1.10                 = 0.66
+coreLift  = (1 - falloff=0) × 0.25 × 0.66 = 0.165
+vert_glow = (0.15/1.15)^1.35           = 0.063868
+axial     = 0.063868 × 1 × 0.42 × 0.66 = 0.017706
+colour    = tint_srgb × (0.88 + 0.165 + 0.017706) = tint_srgb × 1.062706
+```
+
+| 控件 | tint (sRGB) | 手算预测 | 实测盘心 | Δmax |
+|---|---|---|---|---|
+| 红 | (0.98, 0.34, 0.30) | (255, 92, 81) | (255, 93, 81) | 1 |
+| 黄 | (0.98, 0.72, 0.14) | (255, 195, 38) | (255, 193, 39) | 2 |
+| 绿 | (0.16, 0.77, 0.22) | (43, 209, 60) | (44, 208, 59) | 1 |
+
+盘径实测 128 / 129 / 130 px = 64 pt × 2 ✓。
+
+**同一个乘数 1.062706 同时命中三颗**，这本身就是"三颗光份额相同"的证明——若黄绿份额不同，
+预测必然失败。至此 sRGB 色彩链路与光份额都有数值级证据。
+
+**仍未目视验证**：hover 时红灯抬升（单测覆盖份额 1.0/0.6/0.6，但未截图，因为移动鼠标不在
+本轮工具范围内）；暗色模式（`mode_dark` 走 `bright` 亮边分支）。
