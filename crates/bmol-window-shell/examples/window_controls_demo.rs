@@ -41,7 +41,7 @@ pub use window_controls::{
     WINDOW_CONTROL_LARGE_SIZE, WINDOW_CONTROL_LARGE_X, WINDOW_CONTROL_LARGE_Y,
     WINDOW_CONTROL_NATIVE_IDS, WINDOW_CONTROL_NATIVE_SIZE, WINDOW_CONTROL_NATIVE_X,
     WINDOW_CONTROL_NATIVE_Y, WINDOW_CONTROL_REFERENCE_IDS, WINDOW_CONTROL_REFERENCE_X,
-    WINDOW_CONTROL_REFERENCE_Y, WindowExpandBehavior, reference_bead, set_reference_bead,
+    WINDOW_CONTROL_REFERENCE_Y, WindowExpandBehavior,
     window_control_group,
 };
 
@@ -200,7 +200,6 @@ enum Message {
     CopyConfiguration,
     ToggleScheme,
     ToggleDocumentEdited,
-    ToggleMaterialVariant,
     SystemThemeChanged(iced::theme::Mode),
 }
 
@@ -238,22 +237,7 @@ impl Default for State {
 }
 
 fn boot() -> (State, Task<Message>) {
-    let mut state = State::default();
-    // `LIQUID_GLASS_TRAFFIC_LIGHT_MATERIAL=bead` (or `physical`) selects the
-    // control material at launch, so the two appearances can be compared
-    // without clicking through the panel. Unset keeps the physical default.
-    if let Ok(variant) = std::env::var("LIQUID_GLASS_TRAFFIC_LIGHT_MATERIAL") {
-        let bead = matches!(
-            variant.trim().to_ascii_lowercase().as_str(),
-            "bead" | "reference" | "flat" | "1" | "true" | "on"
-        );
-        set_reference_bead(bead);
-        state.last_action = if bead {
-            "Material: reference flat bead (work in progress)".into()
-        } else {
-            "Material: physical glass".into()
-        };
-    }
+    let state = State::default();
     iced_backend::set_surface(DemoSurface::WindowControls);
     iced_backend::set_color_scheme(state.scheme);
     iced_backend::set_accessibility(liquid_glass::GlassAccessibility::none());
@@ -416,14 +400,6 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             iced_backend::set_color_scheme(state.scheme);
             iced_backend::set_window_control_tuning(state.tuning);
         }
-        Message::ToggleMaterialVariant => {
-            set_reference_bead(!reference_bead());
-            state.last_action = if reference_bead() {
-                "Material: reference flat bead (work in progress)".into()
-            } else {
-                "Material: physical glass".into()
-            };
-        }
         Message::ToggleDocumentEdited => {
             state.document_edited = !state.document_edited;
             state.last_action = if state.document_edited {
@@ -495,12 +471,6 @@ fn view(state: &State) -> AppElement<'_> {
                     false => "Mark document edited",
                 }))
                 .on_press(Message::ToggleDocumentEdited)
-                .padding([7, 12]),
-                button(text(match reference_bead() {
-                    true => "Material: reference bead",
-                    false => "Material: physical glass",
-                }))
-                .on_press(Message::ToggleMaterialVariant)
                 .padding([7, 12]),
                 button(text("Copy configuration"))
                     .on_press(Message::CopyConfiguration)

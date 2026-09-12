@@ -1502,15 +1502,15 @@ mod tests {
     }
 
     #[test]
-    fn traffic_lights_use_the_configured_physical_material() {
+    fn traffic_lights_use_the_configured_reference_bead() {
         // The material recipe is the crate's; this asserts the compositor
-        // receives the stock physical response with the tuned knobs applied.
+        // receives the reference bead response with the tuned knobs applied.
         let tuning = WindowControlTuning::default();
         let traffic =
-            traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), false, tuning, 1.0);
+            traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), false, false, tuning, 1.0);
         let stock = GlassMaterial::regular();
 
-        assert_eq!(traffic.variant, GlassVariant::TrafficLightPhysical);
+        assert_eq!(traffic.variant, GlassVariant::TrafficLightBead);
         assert_eq!(traffic.refraction.thickness, stock.refraction.thickness);
         assert_eq!(traffic.refraction.index, stock.refraction.index);
         assert_eq!(traffic.refraction.strength, tuning.refraction_strength);
@@ -1525,7 +1525,7 @@ mod tests {
 
         // The inactive treatment mutes the tint and the opacity.
         let inactive =
-            traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), true, tuning, 0.0);
+            traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), true, false, tuning, 0.0);
         assert!(inactive.tint.a < traffic.tint.a);
         assert!(inactive.opacity < traffic.opacity);
     }

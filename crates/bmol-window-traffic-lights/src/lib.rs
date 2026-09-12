@@ -93,8 +93,7 @@ pub use state::{
 pub use tuning::{TrafficLightMaterialFields, TrafficLightStyleFields, WindowControlTuning};
 
 pub use scene::{
-    group_hover, push_traffic_light_group, reference_bead, scale_scene, set_reference_bead,
-    sphere_bounds, traffic_light_material,
+    group_hover, push_traffic_light_group, scale_scene, sphere_bounds, traffic_light_material,
     traffic_light_source_color, traffic_lights_scene_for_viewport,
 };
 

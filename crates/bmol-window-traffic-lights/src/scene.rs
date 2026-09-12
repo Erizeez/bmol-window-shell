@@ -4,8 +4,6 @@
 //! [`GlassNode`]s. It reads one [`TrafficLightsFrame`] snapshot per call, so the
 //! spheres and the Iced glyph layer are always driven by the same numbers.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use liquid_glass_scene::{
     BeadStyle, Color, CoreLight, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
     GlassVariant, InteractionResponse, Rect, RimProfile, TrafficLightStyle,
@@ -43,12 +41,13 @@ pub fn traffic_light_source_color(
     if press > 0.0 { blend_color(base, pressed, press) } else { base }
 }
 
-/// Builds the physical-glass material for one traffic-light sphere.
+/// Builds the reference bead material for one traffic-light sphere.
 ///
-/// Experimental baseline: the control is an exact circular SDF using the stock
-/// physical glass material. Do not add a traffic-light-specific border, light,
-/// glare, shadow, or size compensation here; the sphere's refraction and
-/// Fresnel response must establish the edge by themselves.
+/// The control is the flat, screen-space bead that the reference rasteriser
+/// produced: a circle carved from the node's own silhouette, painted with the
+/// droplet profile and a mode-exclusive rim, and composited over the sampled
+/// backdrop. All of its numbers travel through the regular glass material, so
+/// nothing here needs a traffic-light-specific render path.
 #[must_use]
 pub fn traffic_light_material(
     color: Color,
@@ -60,11 +59,7 @@ pub fn traffic_light_material(
     let fields = tuning.material_fields([color.r, color.g, color.b, color.a], inactive, focus);
 
     let mut material = GlassMaterial::regular();
-    material.variant = if reference_bead() {
-        GlassVariant::TrafficLightBead
-    } else {
-        GlassVariant::TrafficLightPhysical
-    };
+    material.variant = GlassVariant::TrafficLightBead;
     material.bead = BeadStyle {
         b1: fields.bead[0],
         b2: fields.bead[1],
@@ -131,26 +126,6 @@ pub fn traffic_light_material(
 /// `0.60` for all three in its resting set, and `1.00 / 0.60 / 0.60` in its
 /// hovered set; the pressed set leaves the shares unchanged.
 pub const TRAFFIC_LIGHT_RESTING_GLOW_SHARE: f32 = 0.6;
-
-/// When enabled, the traffic lights render the reference flat bead instead of
-/// physical glass.
-///
-/// The bead variant is not finished yet: its screen-space geometry is
-/// unverified and it returns before the normal composition, so enabling it
-/// renders a wrong and mis-placed control. It is a runtime switch so the two
-/// appearances can be compared without a rebuild.
-static REFERENCE_BEAD: AtomicBool = AtomicBool::new(false);
-
-/// Selects the reference flat bead instead of physical glass.
-pub fn set_reference_bead(enabled: bool) {
-    REFERENCE_BEAD.store(enabled, Ordering::Relaxed);
-}
-
-/// Returns whether the reference flat bead is selected.
-#[must_use]
-pub fn reference_bead() -> bool {
-    REFERENCE_BEAD.load(Ordering::Relaxed)
-}
 
 /// Bounds of control `index` inside a group, given its current press scale.
 ///
@@ -332,13 +307,13 @@ mod tests {
     }
 
     #[test]
-    fn traffic_lights_use_the_physical_material_with_bead_parameters_ready() {
+    fn traffic_lights_select_the_reference_bead_variant() {
         let tuning = WindowControlTuning::default();
         let traffic =
             traffic_light_material(Color::rgba(1.0, 0.37, 0.34, 0.96), false, false, tuning, 1.0);
         let stock = GlassMaterial::regular();
 
-        assert_eq!(traffic.variant, GlassVariant::TrafficLightPhysical);
+        assert_eq!(traffic.variant, GlassVariant::TrafficLightBead);
         assert_eq!(traffic.refraction.thickness, stock.refraction.thickness);
         assert_eq!(traffic.refraction.index, stock.refraction.index);
         assert_eq!(traffic.refraction.strength, tuning.refraction_strength);
