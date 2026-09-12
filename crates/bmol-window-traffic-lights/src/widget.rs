@@ -257,12 +257,12 @@ where
     };
 
     // Layer 3: Apple vector glyph, or the unsaved-document dot.
-    let glyph_element: Element<'a, Message, Theme, Renderer> = if hover <= 0.001 {
-        space().width(Length::Fixed(visual_size)).height(Length::Fixed(visual_size)).into()
-    } else if dot {
-        let dot_color = to_iced(window_control_glyph_color(is_dark, action, !is_active, hover));
-        let opacity = hover.clamp(0.0, 1.0);
-        container(window_control_status_dot(Color { a: opacity, ..dot_color }, size * scale))
+    let glyph_element: Element<'a, Message, Theme, Renderer> = if dot {
+        // The unsaved-document dot is part of the resting control: macOS shows
+        // it whether or not the pointer is over the group. Only the vector
+        // glyphs are hover-revealed.
+        let dot_color = to_iced(window_control_glyph_color(is_dark, action, !is_active, 1.0));
+        container(window_control_status_dot(dot_color, size * scale))
             .width(Length::Fixed(visual_size))
             .height(Length::Fixed(visual_size))
             .center_x(Length::Fixed(visual_size))

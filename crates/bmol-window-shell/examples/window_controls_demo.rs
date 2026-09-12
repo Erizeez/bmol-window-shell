@@ -219,6 +219,7 @@ impl Default for State {
 
 fn boot() -> (State, Task<Message>) {
     let state = State::default();
+    window_controls::set_glass_passthrough(true);
     iced_backend::set_surface(DemoSurface::WindowControls);
     iced_backend::set_color_scheme(state.scheme);
     iced_backend::set_accessibility(liquid_glass::GlassAccessibility::none());
@@ -462,13 +463,20 @@ fn view(state: &State) -> AppElement<'_> {
     for sample in SAMPLES {
         let slop = window_controls::control_hover_slop(sample.size);
         layers.push(positioned(sample_label(sample.label), sample.x, sample.y - 30.0));
+        // The GPU bead supplies the sphere, so the widget contributes only the
+        // Apple vector glyphs -- and those have to be composited *above* the
+        // glass layer, which is what the overlay renderer is for. Without this
+        // the glyphs are drawn into the source layer and the glass covers them.
         layers.push(positioned(
-            window_control_group(sample.ids, sample_style(sample, state), move |_, event| {
-                Message::Lights {
+            liquid_glass_ui::GlassOverlay::new(window_control_group(
+                sample.ids,
+                sample_style(sample, state),
+                move |_, event| Message::Lights {
                     group: sample.group,
                     event,
-                }
-            }),
+                },
+            ))
+            .into(),
             sample.x - slop,
             sample.y - slop,
         ));
