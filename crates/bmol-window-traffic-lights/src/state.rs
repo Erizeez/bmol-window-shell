@@ -45,7 +45,11 @@ pub const PRESS_SPRING_BOUNCE: f32 = 0.70;
 /// Time constant used while revealing the group glyphs.
 pub const INTERACTION_ENTER_ANIMATION_TIME_CONSTANT: f32 = 0.08;
 /// Time constant used while hiding the group glyphs.
-pub const INTERACTION_EXIT_ANIMATION_TIME_CONSTANT: f32 = 0.18;
+///
+/// Halved from `0.18` at the request of the reference appearance: the hide is
+/// now about as quick as the reveal, instead of the softer tail it used to
+/// have. The press tint decays on the same constant, so it falls faster too.
+pub const INTERACTION_EXIT_ANIMATION_TIME_CONSTANT: f32 = 0.09;
 
 /// Longest frame delta the state machine integrates in one step.
 const MAX_STEP: f32 = 0.1;

@@ -26,12 +26,6 @@ use bmol_window_native as liquid_glass_native;
 /// search field is laid out below this chrome instead of being placed inside it.
 pub const FUSED_TOP_BAR_HEIGHT: f32 = bmol_window_platform::window_metrics::FUSED_HEADER_HEIGHT;
 
-/// Entering hover is intentionally crisp, while leaving hover uses the
-/// previous, slightly softer response. Both values are shared with the Iced
-/// glyph layer so the icon and material never drift apart.
-pub const INTERACTION_ENTER_ANIMATION_TIME_CONSTANT: f32 = 0.085 / 4.5;
-pub const INTERACTION_EXIT_ANIMATION_TIME_CONSTANT: f32 = 0.085 / 3.0;
-
 /// The navigation capsule is a 36 pt control centered inside the 52 pt bar.
 pub const TOP_BAR_NAVIGATION_HEIGHT: f32 = 36.0;
 
@@ -276,11 +270,6 @@ impl liquid_glass::GlassForegroundRenderer for Renderer {
             );
         }
     }
-}
-
-fn approach(current: f32, target: f32, step: f32) -> f32 {
-    let value = current + (target - current) * step.clamp(0.0, 1.0);
-    if (value - target).abs() < 0.001 { target } else { value }
 }
 
 impl iced::advanced::Renderer for Renderer {
