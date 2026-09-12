@@ -1,21 +1,35 @@
 //! Authentic macOS window controls (traffic lights) for `bmol-window-shell`.
 //!
-//! This crate is the single owner of the traffic-light feature. It holds, in
-//! dependency order:
+//! This crate owns the traffic-light **semantics**: what each control means,
+//! how hover and press animate, how the material is tuned, and how a frame of
+//! that state becomes GPU glass.
 //!
-//! - [`action`] — the semantic action of each control, and the green control's
-//!   expand behaviour.
-//! - [`palette`] — Apple colourimetry and the extracted vector glyph sources.
-//! - [`layout`] — measured geometry (14 pt diameter, 9 pt spacing) and the
-//!   sample-group layout used by the standalone laboratory.
-//! - [`state`] — the interaction state machine: group hover, per-control press
-//!   tint, and the press scale spring. This module never mentions Iced.
-//! - [`tuning`] — the physical-glass material knobs.
-//! - [`interaction`] — the shared interaction frame the compositor reads, so
-//!   the glyph layer and the GPU material can never disagree about a value.
-//! - [`scene`] — the renderer-agnostic [`liquid_glass_scene::GlassScene`]
-//!   builder for the spheres.
-//! - [`widget`] — the Iced glyph layer and hit testing (feature `iced`).
+//! The **drawing** — the Apple vector glyphs, the optical hit testing, and the
+//! overlay routing that keeps the glyphs above the glass — lives in the shared
+//! widget layer, [`liquid_glass_ui::traffic_light`], because an application
+//! needs the same widget a window shell does.
+//!
+//! # Where each concern lives
+//!
+//! | Concern | Home |
+//! |---------|------|
+//! | Semantic actions and the green control's expand behaviour | [`action`] (widget layer) |
+//! | Measured metrics and the laboratory sample layout | [`layout`] (widget layer) |
+//! | Apple colourimetry and the extracted vector glyph sources | [`palette`] (widget layer) |
+//! | The pointer-event vocabulary the widget emits | [`event`] (widget layer) |
+//! | The Iced glyph layer and hit testing | [`liquid_glass_ui::traffic_light::widget`] |
+//! | Interaction state machine (hover, press, press-scale spring) | [`state`] |
+//! | The shared interaction frame the compositor reads | [`interaction`] |
+//! | Material tuning | [`tuning`] |
+//! | Renderer-agnostic [`liquid_glass_scene::GlassScene`] construction | [`scene`] |
+//! | The state machine → widget bridge | [`widget`] (feature `iced`) |
+//!
+//! ## Why the control data is not owned here
+//!
+//! The widget needs the actions, the metrics, the colourimetry and the glyph
+//! sources, so they are owned by the widget layer and re-exported below.
+//! Keeping a second copy here is what let the two drift apart: the shell's
+//! glyphs once disagreed with the widget's about the same control.
 //!
 //! # Architecture
 //!
@@ -24,11 +38,12 @@
 //! 1. [`TrafficLightsState`] owns *interaction* (hover, press, scale).
 //! 2. [`interaction`] publishes those values once per tick.
 //! 3. [`scene`] turns them into a physical-glass [`liquid_glass_scene::GlassScene`].
-//! 4. [`widget`] draws only the Apple vector glyphs and reports pointer facts.
+//! 4. The widget layer draws the Apple vector glyphs and reports pointer facts.
+//! 5. [`widget`] bridges 1–4 for a real window.
 //!
-//! The Liquid Glass *effect* itself — the `TrafficLightPhysical` material
-//! variant, its style, and the shader that implements it — lives in liquid-rs.
-//! This crate never reimplements it; it only selects and tunes it.
+//! The Liquid Glass *effect* itself — the bead material variant, its style, and
+//! the shader that implements it — lives in liquid-rs. This crate never
+//! reimplements it; it only selects and tunes it.
 //!
 //! # Press scale contract
 //!
@@ -52,10 +67,12 @@
     clippy::too_many_lines
 )]
 
-pub mod action;
+// Re-exported as modules rather than only as items: the widget layer owns
+// these, and keeping the module paths alive means the crate still presents one
+// public surface instead of forwarding a bare list of names.
+pub use liquid_glass_ui::traffic_light::{action, event, layout, palette};
+
 pub mod interaction;
-pub mod layout;
-pub mod palette;
 pub mod scene;
 pub mod state;
 pub mod tuning;
@@ -64,6 +81,8 @@ pub mod tuning;
 pub mod widget;
 
 pub use action::{ControlAction, WindowControlAction, WindowExpandBehavior};
+
+pub use event::TrafficLightsEvent;
 
 pub use layout::{
     GROUP_COUNT, GROUP_LEN, WINDOW_CONTROL_DISABLED_IDS, WINDOW_CONTROL_DISABLED_X,
@@ -87,7 +106,7 @@ pub use palette::{
 pub use state::{
     INTERACTION_ENTER_ANIMATION_TIME_CONSTANT, INTERACTION_EXIT_ANIMATION_TIME_CONSTANT,
     PRESS_SCALE_PEAK, PRESS_SCALE_REST, PRESS_SPRING_BOUNCE, PRESS_SPRING_DURATION,
-    TrafficLightSlot, TrafficLightsEvent, TrafficLightsState,
+    TrafficLightSlot, TrafficLightsState,
 };
 
 pub use tuning::{TrafficLightMaterialFields, WindowControlTuning};
@@ -108,11 +127,16 @@ pub use interaction::{
     window_control_press_progress, window_control_scale, window_control_slot_index,
 };
 
+// The widget and its builders, owned by the widget layer.
 #[cfg(feature = "iced")]
-pub use widget::{
+pub use liquid_glass_ui::traffic_light::{
     CircleStyle, ControlGroup, ControlGroupStyle, TrafficLightGroup, centered, control_group,
-    glass_passthrough, is_document_edited, native_group_style, positioned_control_group,
-    set_document_edited, set_glass_passthrough, view_single_button,
-    view_single_button_interactive, view_traffic_lights_all_inclusive, window_control_circle,
-    window_control_group, window_control_status_dot,
+    glass_passthrough, is_document_edited, positioned_control_group, set_document_edited,
+    set_glass_passthrough, view_single_button, view_single_button_interactive,
+    window_control_circle, window_control_group, window_control_status_dot,
 };
+
+// The shell-side bridge: the measured-origin publisher and the state-machine
+// adapters.
+#[cfg(feature = "iced")]
+pub use widget::{native_group_style, view_traffic_lights_all_inclusive};

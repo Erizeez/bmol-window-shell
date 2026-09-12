@@ -175,6 +175,7 @@ impl WindowShellController {
         Renderer: iced::advanced::Renderer
             + iced::advanced::svg::Renderer
             + iced::advanced::text::Renderer
+            + liquid_glass_ui::GlassForegroundRenderer
             + 'a,
     {
         super::scaffold::WindowScaffold::new(self, body)
@@ -395,7 +396,10 @@ impl WindowShellController {
             From<iced::widget::container::StyleFn<'a, Theme>>,
         <Theme as iced::widget::svg::Catalog>::Class<'a>:
             From<iced::widget::svg::StyleFn<'a, Theme>>,
-        Renderer: iced::advanced::Renderer + iced::advanced::svg::Renderer + 'a,
+        Renderer: iced::advanced::Renderer
+            + iced::advanced::svg::Renderer
+            + liquid_glass_ui::GlassForegroundRenderer
+            + 'a,
     {
         super::traffic_lights::view_traffic_lights_all_inclusive(
             &self.traffic_lights,
@@ -425,7 +429,10 @@ impl WindowShellController {
             From<iced::widget::container::StyleFn<'a, Theme>>,
         <Theme as iced::widget::svg::Catalog>::Class<'a>:
             From<iced::widget::svg::StyleFn<'a, Theme>>,
-        Renderer: iced::advanced::Renderer + iced::advanced::svg::Renderer + 'a,
+        Renderer: iced::advanced::Renderer
+            + iced::advanced::svg::Renderer
+            + liquid_glass_ui::GlassForegroundRenderer
+            + 'a,
     {
         let (origin_x, origin_y) = super::traffic_lights::active_window_control_origin();
         super::traffic_lights::positioned_control_group(
@@ -453,7 +460,10 @@ impl WindowShellController {
             From<iced::widget::container::StyleFn<'a, Theme>>,
         <Theme as iced::widget::svg::Catalog>::Class<'a>:
             From<iced::widget::svg::StyleFn<'a, Theme>>,
-        Renderer: iced::advanced::Renderer + iced::advanced::svg::Renderer + 'a,
+        Renderer: iced::advanced::Renderer
+            + iced::advanced::svg::Renderer
+            + liquid_glass_ui::GlassForegroundRenderer
+            + 'a,
     {
         super::traffic_lights::view_traffic_lights_all_inclusive(
             state,

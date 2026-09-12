@@ -15,6 +15,7 @@ iced = [
     "dep:spring-rs",
     "dep:squircle-rs",
     "dep:bmol-window-traffic-lights",
+    "dep:liquid-glass-ui",
     "bmol-window-traffic-lights/iced",
 ]
 # Out-of-scope convenience helpers, opt-in per app:
@@ -31,6 +32,10 @@ raw-window-handle = "0.6.2"
 iced = { version = "0.14.0", default-features = false, features = ["wgpu", "advanced", "canvas", "svg", "image-without-codecs", "smol"], optional = true }
 spring-rs = { git = "https://github.com/Erizeez/spring-rs.git", tag = "v0.1.0", optional = true }
 squircle-rs = { git = "https://github.com/Erizeez/squircle-rs", tag = "v0.1.2", optional = true }
+# Shared widget layer. The traffic-light widget, its overlay routing, and the
+# renderer trait that layer lives on are owned there, because applications need
+# the same widgets the shell does.
+liquid-glass-ui = { git = "https://github.com/Erizeez/bmol-glass-ui", tag = "v0.1.5", optional = true }
 
 [dev-dependencies]
 bytemuck = { version = "1.24.0", features = ["derive"] }
@@ -42,7 +47,6 @@ liquid-glass = { package = "bmol-iced", git = "https://github.com/Erizeez/bmol-i
 liquid-rs = { git = "https://github.com/Erizeez/liquid-rs", branch = "main" }
 liquid-glass-render = { git = "https://github.com/Erizeez/liquid-rs", branch = "main" }
 liquid-glass-scene = { git = "https://github.com/Erizeez/liquid-rs", branch = "main" }
-liquid-glass-ui = { git = "https://github.com/Erizeez/bmol-glass-ui", tag = "v0.1.4" }
 bmol-designs = { git = "https://github.com/Erizeez/bmol-designs", tag = "v0.1.6" }
 pollster = "1.0.1"
 macos-typography = { git = "https://github.com/Erizeez/macos-fonts.git", tag = "v0.1.4" }

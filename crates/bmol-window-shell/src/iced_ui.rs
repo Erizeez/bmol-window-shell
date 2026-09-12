@@ -23,6 +23,13 @@ pub use traffic_lights::{
     window_control_group,
 };
 
+/// The renderer trait a Liquid Glass compositor implements.
+///
+/// The traffic-light widget routes its glyph layer above the glass pass, so the
+/// traffic-light builders require this bound. Re-exported here so an
+/// application can name it without depending on the widget crate directly.
+pub use liquid_glass_ui::GlassForegroundRenderer;
+
 use iced::{
     Color, Element, Length,
     widget::{container, mouse_area},

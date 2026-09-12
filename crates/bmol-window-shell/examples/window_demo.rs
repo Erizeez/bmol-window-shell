@@ -464,18 +464,18 @@ fn view(state: &DemoState) -> AppElement<'_> {
 // Hand-crafted Apple-style Liquid Glass Traffic Lights (Close / Minimize / Zoom)
 // =========================================================================
 
-fn view_traffic_lights<'a>(state: &'a DemoState) -> AppElement<'a> {
-    // The GPU bead draws the sphere, so the widget contributes only the Apple
-    // vector glyphs -- and a glyph layer has to be composited *above* the glass
-    // or the glass covers it. This demo used to place the group straight into
-    // the header row, which is why its controls showed no symbols at all.
-    liquid_glass_ui::GlassOverlay::new(window_controls::view_traffic_lights_all_inclusive(
+fn view_traffic_lights(state: &DemoState) -> AppElement<'_> {
+    // The GPU bead draws the sphere and the widget contributes only the Apple
+    // vector glyphs. The widget layer routes that glyph layer above the glass
+    // pass itself, so placing the group is all this demo has to do -- this used
+    // to need an explicit `GlassOverlay` here, and forgetting it is why the
+    // controls once showed no symbols at all.
+    window_controls::view_traffic_lights_all_inclusive(
         &state.traffic_lights,
         state.window_focused,
         state.is_dark(),
         Message::TrafficLights,
-    ))
-    .into()
+    )
 }
 
 fn view_theme_toggle(state: &DemoState) -> AppElement<'_> {

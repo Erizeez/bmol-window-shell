@@ -58,7 +58,11 @@ where
         From<iced::widget::svg::StyleFn<'a, Theme>>,
     <Theme as iced::widget::text::Catalog>::Class<'a>:
         From<iced::widget::text::StyleFn<'a, Theme>>,
-    Renderer: advanced::Renderer + advanced_svg::Renderer + advanced::text::Renderer + 'a,
+    Renderer: advanced::Renderer
+        + advanced_svg::Renderer
+        + advanced::text::Renderer
+        + liquid_glass_ui::GlassForegroundRenderer
+        + 'a,
 {
     /// Creates a new scaffold wrapping the given client area content.
     pub fn new(
@@ -270,7 +274,11 @@ mod tests {
         let config = WindowChromeConfig::separate(32.0);
         let controller = WindowShellController::new(config, false);
 
-        let _element: Element<'_, (), iced::Theme, iced::Renderer> = controller
+        // `iced::Renderer` is the bare `iced_wgpu` renderer here, which has no
+        // Liquid Glass compositor and therefore no overlay pass. The traffic-light
+        // path needs one, so this test uses the null renderer, which implements
+        // the trait and is what the widget layer's own tests use.
+        let _element: Element<'_, (), iced::Theme, ()> = controller
             .scaffold(space())
             .title("Test Window")
             .on_drag(())

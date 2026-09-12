@@ -1,6 +1,6 @@
 [package]
 name = "bmol-window-traffic-lights"
-description = "Authentic macOS traffic lights: interaction state machine, Iced widget, and Liquid Glass scene."
+description = "Authentic macOS traffic lights: interaction state machine, material tuning, and Liquid Glass scene."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,8 +10,10 @@ repository.workspace = true
 
 [features]
 default = []
-# Pulls in the Iced glyph layer and hit-testing widget. The state machine,
-# palette, tuning, and GPU scene builder stay usable without Iced.
+# The shell-side Iced bridge: the measured-origin publisher and the two
+# adapters that turn a `TrafficLightsState` into a widget element. The state
+# machine, the interaction frame, the tuning, and the GPU scene builder are
+# Iced-free.
 iced = ["dep:iced"]
 
 [dependencies]
@@ -24,6 +26,12 @@ liquid-glass-scene = { git = "https://github.com/Erizeez/liquid-rs", branch = "m
 # Spring physics for the press scale. Not optional: the state machine is the
 # crate's core and must stay usable outside a GUI.
 spring-rs = { git = "https://github.com/Erizeez/spring-rs", tag = "v0.1.0" }
+# The control data -- actions, measured metrics, Apple colourimetry, the glyph
+# sources, and the pointer-event vocabulary -- plus the Iced widget that draws
+# and hit-tests them. They live in the shared widget layer because an
+# application needs the same widget; this crate re-exports them and owns
+# everything *around* the widget instead.
+liquid-glass-ui = { git = "https://github.com/Erizeez/bmol-glass-ui", tag = "v0.1.5" }
 
 iced = { version = "0.14.0", default-features = false, features = [
     "wgpu",

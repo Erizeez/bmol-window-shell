@@ -84,36 +84,10 @@ impl TrafficLightSlot {
     }
 }
 
-/// Unified interaction event emitted by the traffic-light widget.
-///
-/// The widget reports *facts*: what the pointer did. The state machine decides
-/// what they mean, and returns a [`WindowControlAction`] only when a press was
-/// committed to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TrafficLightsEvent {
-    /// The pointer entered or left the whole group. Drives the glyph reveal.
-    GroupHover(bool),
-    /// The pointer pressed this control.
-    PressStart(usize),
-    /// The pointer left this control while still holding the button.
-    PressCancel(usize),
-    /// The button was released. `committed` is `true` when the pointer was over
-    /// the same control it pressed.
-    PressEnd { index: usize, committed: bool },
-}
-
-impl TrafficLightsEvent {
-    /// The control index this event addresses, if any.
-    #[must_use]
-    pub const fn index(self) -> Option<usize> {
-        match self {
-            Self::GroupHover(_) => None,
-            Self::PressStart(index)
-            | Self::PressCancel(index)
-            | Self::PressEnd { index, .. } => Some(index),
-        }
-    }
-}
+// The widget's output vocabulary. It is defined by the widget -- that is what
+// emits it -- and re-exported here so the state machine's own surface and the
+// historical `state::TrafficLightsEvent` path both keep resolving.
+pub use crate::event::TrafficLightsEvent;
 
 /// Dynamic interaction and animation state for a traffic-light group.
 ///

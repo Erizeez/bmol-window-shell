@@ -464,19 +464,17 @@ fn view(state: &State) -> AppElement<'_> {
         let slop = window_controls::control_hover_slop(sample.size);
         layers.push(positioned(sample_label(sample.label), sample.x, sample.y - 30.0));
         // The GPU bead supplies the sphere, so the widget contributes only the
-        // Apple vector glyphs -- and those have to be composited *above* the
-        // glass layer, which is what the overlay renderer is for. Without this
-        // the glyphs are drawn into the source layer and the glass covers them.
+        // Apple vector glyphs. The widget routes those above the glass pass
+        // itself, so no overlay wrapper is needed here any more.
         layers.push(positioned(
-            liquid_glass_ui::GlassOverlay::new(window_control_group(
+            window_control_group(
                 sample.ids,
                 sample_style(sample, state),
                 move |_, event| Message::Lights {
                     group: sample.group,
                     event,
                 },
-            ))
-            .into(),
+            ),
             sample.x - slop,
             sample.y - slop,
         ));
