@@ -84,6 +84,11 @@ pub fn traffic_light_material(
     material.core_light = CoreLight {
         uniform_light: fields.core_light[0],
         thin_light_gain: fields.core_light[1],
+        core_lift: fields.core_light[2],
+        axial_glow: fields.core_light[3],
+        core_power: fields.core_light[4],
+        vertical_power: fields.core_light[5],
+        horizontal_power: fields.core_light[6],
     };
     material.refraction.strength = fields.refraction_strength;
     material.fresnel.strength = fields.fresnel_strength;

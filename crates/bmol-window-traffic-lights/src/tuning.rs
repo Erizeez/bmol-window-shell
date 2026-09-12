@@ -37,6 +37,16 @@ pub struct WindowControlTuning {
     pub uniform_light: f32,
     /// Extra centre-light release toward the thinner lower hemisphere.
     pub thin_light_gain: f32,
+    /// Peak saturation lift at the optical centre of the droplet profile.
+    pub core_lift: f32,
+    /// Peak strength of the vertical axial glow.
+    pub axial_glow: f32,
+    /// Radial exponent of the core profile (`4.0` = reference `(1 - t)^4`).
+    pub core_power: f32,
+    /// Exponent of the vertical gradient; larger pools the light lower.
+    pub vertical_power: f32,
+    /// Exponent of the horizontal roll-off; smaller widens the lit centre.
+    pub horizontal_power: f32,
 }
 
 impl WindowControlTuning {
@@ -65,6 +75,11 @@ impl WindowControlTuning {
             press_lift: 0.06,
             uniform_light: 0.045,
             thin_light_gain: 0.055,
+            core_lift: 0.25,
+            axial_glow: 0.46,
+            core_power: 4.0,
+            vertical_power: 1.35,
+            horizontal_power: 0.25,
         }
     }
 
@@ -98,6 +113,11 @@ impl WindowControlTuning {
                 press_lift: 0.06,
                 uniform_light: 0.045,
                 thin_light_gain: 0.055,
+                core_lift: 0.25,
+                axial_glow: 0.46,
+                core_power: 4.0,
+                vertical_power: 1.35,
+                horizontal_power: 0.25,
             }
         } else {
             Self::new()
@@ -126,7 +146,15 @@ impl WindowControlTuning {
             refraction_strength: self.refraction_strength,
             fresnel_strength: self.fresnel_strength,
             interaction: [self.hover_gain, self.press_gain, self.press_lift],
-            core_light: [self.uniform_light, self.thin_light_gain],
+            core_light: [
+                self.uniform_light,
+                self.thin_light_gain,
+                self.core_lift,
+                self.axial_glow,
+                self.core_power,
+                self.vertical_power,
+                self.horizontal_power,
+            ],
             style: TrafficLightStyleFields {
                 substrate_coverage: self.substrate_coverage,
                 lower_substrate_coverage: self.lower_substrate_coverage,
@@ -169,6 +197,11 @@ impl WindowControlTuning {
             press_lift: self.press_lift.clamp(0.0, 1.0),
             uniform_light: self.uniform_light.clamp(0.0, 1.0),
             thin_light_gain: self.thin_light_gain.clamp(0.0, 1.0),
+            core_lift: self.core_lift.clamp(0.0, 1.0),
+            axial_glow: self.axial_glow.clamp(0.0, 1.0),
+            core_power: self.core_power.clamp(1.0, 8.0),
+            vertical_power: self.vertical_power.clamp(0.25, 4.0),
+            horizontal_power: self.horizontal_power.clamp(0.05, 2.0),
         }
     }
 }
@@ -209,8 +242,9 @@ pub struct TrafficLightMaterialFields {
     pub fresnel_strength: f32,
     /// Pointer-engagement gains, in the order hover / press / press lift.
     pub interaction: [f32; 3],
-    /// Centre-light strengths, in the order uniform / thin.
-    pub core_light: [f32; 2],
+    /// Centre light, in the order uniform, thin, core lift, axial glow, core
+    /// power, vertical power, horizontal power.
+    pub core_light: [f32; 7],
     pub style: TrafficLightStyleFields,
 }
 
@@ -254,7 +288,10 @@ mod tests {
         assert!(revealed.tint[3] <= active.tint[3] + f32::EPSILON);
         assert!(revealed.opacity > dark_inactive.opacity);
         assert_eq!(revealed.interaction, [0.22, 0.12, 0.06]);
-        assert_eq!(revealed.core_light, [0.045, 0.055]);
+        assert_eq!(
+            revealed.core_light,
+            [0.045, 0.055, 0.25, 0.46, 4.0, 1.35, 0.25]
+        );
         assert_eq!(revealed.style.substrate_coverage, tuning.substrate_coverage);
         assert_eq!(revealed.blur_radius, tuning.blur_radius);
         assert_eq!(revealed.refraction_strength, tuning.refraction_strength);
@@ -285,6 +322,11 @@ mod tests {
             press_lift: 4.0,
             uniform_light: 5.0,
             thin_light_gain: -2.0,
+            core_lift: 3.0,
+            axial_glow: -1.0,
+            core_power: 99.0,
+            vertical_power: 0.0,
+            horizontal_power: 9.0,
         }
         .clamped();
 
@@ -299,5 +341,10 @@ mod tests {
         assert_eq!(wild.press_lift, 1.0);
         assert_eq!(wild.uniform_light, 1.0);
         assert_eq!(wild.thin_light_gain, 0.0);
+        assert_eq!(wild.core_lift, 1.0);
+        assert_eq!(wild.axial_glow, 0.0);
+        assert_eq!(wild.core_power, 8.0);
+        assert_eq!(wild.vertical_power, 0.25);
+        assert_eq!(wild.horizontal_power, 2.0);
     }
 }

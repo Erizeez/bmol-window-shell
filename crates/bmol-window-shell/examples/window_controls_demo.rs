@@ -163,6 +163,11 @@ enum TuningParameter {
     PressLift,
     UniformLight,
     ThinLightGain,
+    CoreLift,
+    AxialGlow,
+    CorePower,
+    VerticalPower,
+    HorizontalPower,
 }
 
 #[derive(Debug, Clone)]
@@ -351,6 +356,11 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
                 TuningParameter::PressLift => state.tuning.press_lift = value,
                 TuningParameter::UniformLight => state.tuning.uniform_light = value,
                 TuningParameter::ThinLightGain => state.tuning.thin_light_gain = value,
+                TuningParameter::CoreLift => state.tuning.core_lift = value,
+                TuningParameter::AxialGlow => state.tuning.axial_glow = value,
+                TuningParameter::CorePower => state.tuning.core_power = value,
+                TuningParameter::VerticalPower => state.tuning.vertical_power = value,
+                TuningParameter::HorizontalPower => state.tuning.horizontal_power = value,
             }
             iced_backend::set_window_control_tuning(state.tuning);
         }
@@ -519,7 +529,12 @@ hover_gain = {hover_gain:.4}\n\
 press_gain = {press_gain:.4}\n\
 press_lift = {press_lift:.4}\n\
 uniform_light = {uniform_light:.4}\n\
-thin_light_gain = {thin_light_gain:.4}\n",
+thin_light_gain = {thin_light_gain:.4}\n\
+core_lift = {core_lift:.4}\n\
+axial_glow = {axial_glow:.4}\n\
+core_power = {core_power:.4}\n\
+vertical_power = {vertical_power:.4}\n\
+horizontal_power = {horizontal_power:.4}\n",
         edited = state.document_edited,
         blur_radius = tuning.blur_radius,
         internal_scattering = tuning.internal_scattering,
@@ -542,6 +557,11 @@ thin_light_gain = {thin_light_gain:.4}\n",
         press_lift = tuning.press_lift,
         uniform_light = tuning.uniform_light,
         thin_light_gain = tuning.thin_light_gain,
+        core_lift = tuning.core_lift,
+        axial_glow = tuning.axial_glow,
+        core_power = tuning.core_power,
+        vertical_power = tuning.vertical_power,
+        horizontal_power = tuning.horizontal_power,
     )
 }
 
@@ -723,6 +743,46 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             0.0..=0.60,
             0.005,
             |value| Message::TuningChanged { parameter: TuningParameter::ThinLightGain, value },
+        ),
+        components::setting_slider_with_step(
+            "Core lift (droplet centre)",
+            format!("{:.0}%", tuning.core_lift * 100.0),
+            tuning.core_lift,
+            0.0..=1.0,
+            0.01,
+            |value| Message::TuningChanged { parameter: TuningParameter::CoreLift, value },
+        ),
+        components::setting_slider_with_step(
+            "Axial glow",
+            format!("{:.0}%", tuning.axial_glow * 100.0),
+            tuning.axial_glow,
+            0.0..=1.0,
+            0.01,
+            |value| Message::TuningChanged { parameter: TuningParameter::AxialGlow, value },
+        ),
+        components::setting_slider_with_step(
+            "Core profile power",
+            format!("{:.1}", tuning.core_power),
+            tuning.core_power,
+            1.0..=8.0,
+            0.1,
+            |value| Message::TuningChanged { parameter: TuningParameter::CorePower, value },
+        ),
+        components::setting_slider_with_step(
+            "Vertical power",
+            format!("{:.2}", tuning.vertical_power),
+            tuning.vertical_power,
+            0.25..=4.0,
+            0.05,
+            |value| Message::TuningChanged { parameter: TuningParameter::VerticalPower, value },
+        ),
+        components::setting_slider_with_step(
+            "Horizontal roll-off",
+            format!("{:.2}", tuning.horizontal_power),
+            tuning.horizontal_power,
+            0.05..=2.0,
+            0.05,
+            |value| Message::TuningChanged { parameter: TuningParameter::HorizontalPower, value },
         ),
     ]);
 
