@@ -820,3 +820,97 @@ shell 的 `Cargo.lock` **仍停在 `dbf707f4`**，即仓库现在可构建、但
 而修复那一行所在的文件与你的未提交 WIP 混在一起，我不能替你提交（§8.4 有命令）。
 
 `481043a` 的验证是用合成提交绕过去做的，那个分支/对象不会被推送，也不会污染你的仓库。
+
+---
+
+## 第九轮：bmol-iced 依赖对齐（`bmol-iced` `0129703`）
+
+**症状**：bmol-iced 工作区构建挂在 `bmol-window-glass` 上——那是 bmol-window-shell main
+上**早已删除**的 crate。
+
+**根因**：`bmol-window-shell` v0.1.8 有 `default = ["iced"]`，而 `iced` feature 里正是
+`dep:bmol-window-glass`。三处 manifest 用了默认 features 又钉在 `tag = "v0.1.8"`，
+于是死 crate 被拖进图里。
+
+**为什么 `tag` 不能随便改 `branch`**：担心 `bmol-window-shell` ↔ `bmol-iced` 成环。
+查实后：shell crate 对 bmol-iced 的依赖是 **`[dev-dependencies]`**（供它自己的 examples），
+dev-dep 在正常构建里不构成环。所以可以移。
+
+**做法**：6 条声明 `tag = "v0.1.8"` → `branch = "main"`，全链收敛成单份。
+`bmol-glass-iced` 同时脱离 `bmol-window-glass`，改依赖
+`bmol-window-traffic-lights` + `bmol-window-platform`（后者只依赖 bmol-designs，无环）。
+
+**暴露出的 3 处旧状态机 API**（此前仅因钉在 v0.1.8 才能编译）：
+`press_springs[i].value()` → `press_scale(i)`（2 处）；
+`TrafficLightsEvent::Action(WindowControlAction::Zoom)` 在新枚举中无对应变体，映射为
+绿键的 `PressEnd { index: 2, committed: true }`，由 `handle_event` 解析出同一动作。
+
+**兼容层**：`bmol-window-traffic-lights` 新增逐字段写入
+（`set_window_control_scale` / `_press_progress` / `_group_progress` / `_group_hover` /
+`window_control_group_hover_target`），让"自己推进 spring 并推值"的宿主不必复制状态机。
+`publish_group` 仍是首选入口。
+
+**验证**：`cargo tree -i bmol-window-glass` → 不存在；你的工作区与
+`git archive HEAD` 的全新树都 `cargo build --workspace` 通过。
+
+## 第十轮：图标层恢复（shell `f6654cd`）
+
+**症状**：红绿灯完全没有图标——静止没有，hover 也没有。
+
+**根因不是样式丢了**：四种图标的绘制代码一直在（`palette.rs` 的 4 个 Apple 矢量 SVG +
+`window_control_status_dot`，`widget.rs` 的 `window_control_circle` 三层结构）。
+问题是**图层顺序**：图标被画进 iced 的 **source 层**，而 GPU glass 合成在它**上面**，
+整层被盖住。
+
+定位方法：加临时 env 钩子强制 `hover=1.0` + `document_edited=true` 后截图——64pt 那行
+**仍然一个图标都没有**，从而排除"只是静止态隐藏"的观感解释。
+
+**做法**（用 `liquid-glass-ui` 现成机制）：
+1. 每组子树包进 `GlassOverlay` → 经 `begin_glass_overlay` 路由到 overlay 层，画在 glass 之上；
+2. `set_glass_passthrough(true)` → widget 不再重复画球体与 specular 弧，只贡献图标，
+   球体由 GPU bead 提供。
+
+**顺带修正与旧样式的一处不一致**：B 里圆点**不依赖 hover**（`if show_status_dot` 排在
+`hover_amount > 0.001` 之前，圆点恒显），而当前实现把圆点和图标一起挂在 hover 上，
+所以点了"Mark document edited"、指针不上去就什么都不显示。已改为"圆点属于静止态控件，
+只有矢量图标才 hover 显示"。
+
+**验证（截图）**：强制 hover 时 64pt 行 ✕ / − / **+** 齐全，14pt 行走 `SVG_ZOOM`
+（该样本是 `Expand`），Inactive 行保持淡色调图标；静止时 ✕/−/+ 隐藏；
+静止 + 已标记编辑时红键**显示圆点且无需指针**。
+
+## 第十一轮：hover 淡出提速（shell `f9d346d`、`35b07e4`）
+
+`INTERACTION_EXIT_ANIMATION_TIME_CONSTANT`（"hiding the group glyphs" 的时间常数）：
+`0.18` → `0.09`（快一倍）→ `0.06`（再快 50%）。指数衰减 `1 - exp(-dt/τ)`，故 60 Hz 下
+静定时间 0.8s → 0.4s → **约 0.28s**。按下色调衰减共用同一常数，也跟着变快。
+
+**副作用**：现在隐藏（0.06）比显示（0.08）更快——"离开"成了更锐利的一边，
+与 widget 里那条旧注释（*entering crisp, leaving softer*）刚好相反。
+
+**同时清掉一个陷阱**：`iced_backend.rs` 里有**同名不同值的第二份定义**
+（enter `0.085/4.5`、exit `0.085/3.0`）以及喂给它们的 `approach`，三者都是死代码
+（编译器早已警告 never used）。**改后端那个文件不会有任何效果**——正好是这次容易踩的坑。
+已全部删除，全仓只剩 `state.rs` 一处定义。
+
+---
+
+## 提交前状态（截至本轮）
+
+| 仓库 | 状态 |
+|---|---|
+| `liquid-rs` | 干净，与 origin 同步（`481043a`） |
+| `bmol-window-shell` | 干净，与 origin 同步（`35b07e4`） |
+| `bmol-iced` | 我的提交已推送（`d7ff9b0` `c32a9ab` `0129703`）；**未提交的只有你的 dock WIP** |
+
+**验证**：三个仓库分别 `cargo build/test --workspace --all-targets` 通过
+（liquid-rs 26 项、shell 94 项；bmol-iced `--all-targets` 构建通过）。
+
+**给你的 WIP 提一句**：`crates/bmol-iced/src/lib.rs` 里那行 `TrafficLightStyle` 移除已在
+`c32a9ab` 进 HEAD，你工作区那份也含它，所以提交时不会有冲突。
+
+**仍未做的两件（等你定）**：
+1. `window_demo.rs` 的红绿灯走同一条 widget 路径但没有 overlay 包装，若那边也看不到图标，
+   同样加一层 `GlassOverlay` 即可。
+2. root `Cargo.toml` 的 `[patch."https://github.com/Erizeez/liquid-rs"]` 现在无害且不再必要
+   （所有依赖都走 `branch = "main"`，本地 liquid-rs main 即远端 main）。
