@@ -503,3 +503,57 @@ edge darkness / highlight）都在面板上。
 | liquid-rs | `d23ff66` | `GlassRenderOptions::scale_factor` + `u_renderScale` |
 | bmol-window-shell | `5934a86` | backdrop pin 跨缩放保持；demo 支持 `LIQUID_GLASS_TRAFFIC_LIGHT_MATERIAL=bead\|physical` |
 | bmol-window-shell | `a886ea9` | 把 `viewport.scale_factor()` 送进 render options |
+
+### 6.7 sRGB 重算（已按你的确认执行）
+
+B 的光栅器把所有常量都作用在 **sRGB 编码值**上，然后直接写出 sRGB 字节：
+
+```
+base_r = button_r * (0.88 + depth_lift)          // sRGB 空间
+final_r = (base_r - dark_drop + light_contrib).clamp(0.0, 1.0)
+raw[idx] = (final_r * 255.0).round()             // 写成 sRGB 字节
+```
+
+而 shader 在**线性光**里算（`u_tint.rgb` 经 `srgb_to_linear_rgba` 解码，输出到 sRGB target
+由硬件编码）。同一组常量在两个空间里差别很大：
+
+| 项 | sRGB 空间 | 线性空间后经编码 |
+|---|---|---|
+| `0.88` 基数 | −12% | 约 −5.7% |
+| 增益 `×(0.88+lift)` | 直接乘 | 被 sRGB 曲线压缩 |
+| `52/255` 暗边减法 | 直接减 | 感知上弱得多 |
+
+**做法**：在 bead 分支内 `encodeSrgb(u_tint.rgb)` 进入 B 的空间，算完再 `decodeSrgb`
+回到线性交给 target。`u_interactionResponse.z` 的按下加色也从"线性 tint"改为"sRGB tint"，
+消掉那一项自身的空间错配。新增 `encodeSrgbChannel` / `decodeSrgbChannel` / `encodeSrgb` /
+`decodeSrgb` 四个 helper（含 0.0031308 / 0.04045 的分段线性段）。
+
+**数值验证**（64pt 红球，dpr 2，crop 中心 (87.5, 87)，半径 63.5px）：
+
+| | 改前 | 改后 | B 公式手算 |
+|---|---|---|---|
+| 盘心 | (254, 95, 83) | (254, 105, 92) | (255, 108, 102) |
+| 边缘暗边最深 G | 203 | 157 | — |
+
+中心与手算的残差来自 demo 实际 tuning 与 B 的 `PhysicalTrafficLightTuning::default()`
+不同，不是公式误差。
+
+**对称性**：`|dx| ≤ 48` 范围内左右完全相同（Δmax ≤ 2）；只有最外 1–2px 有 7–17 的差异，
+因为圆心落在半像素 x=87.5，左右边缘的亚像素相位不同。**不存在横向不对称**——之前肉眼
+看到的"左暗右亮"是 WebP 预览的边缘混叠错觉。
+
+**暗边系数反推**：边缘 `colour_srgb = tint_srgb×0.88 − (52/255)×|nx|²×I`，代入实测解出
+`I ≈ 2.1`，与 B 的 `dark_rim_intensity = 2.00` 相符，残差 ~0.04 为 AA 混合。
+
+**验证**：physical 变体截图在 sRGB 改动前后**依然 bit-identical**（`b3ad1e3e…`），
+证明 helper 与改动只作用于 bead。
+
+**未验证**：暗色模式（`mode_dark = 1`，走 `bright` 亮边而非 `darkDrop` 暗边）。它用的是
+同一套 sRGB 公式，但需要切到 dark scheme 才能截图，本轮未做。
+
+**提交**：liquid-rs `0c28e8b`。
+
+### 6.8 误提交的 liquid-rs WIP
+
+`2cc81a3`（我误将你的 content-glass WIP 用错误消息提交并推送）—— 按你的决定**保留现状**，
+不改写历史。
