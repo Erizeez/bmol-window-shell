@@ -624,3 +624,70 @@ colour    = tint_srgb × (0.88 + 0.165 + 0.017706) = tint_srgb × 1.062706
 
 **仍未目视验证**：hover 时红灯抬升（单测覆盖份额 1.0/0.6/0.6，但未截图，因为移动鼠标不在
 本轮工具范围内）；暗色模式（`mode_dark` 走 `bright` 亮边分支）。
+
+---
+
+## 第七轮：bead 转为唯一外观，physical 开始拆除
+
+### 7.1 已完成：bead 成为唯一变体
+
+按你的决定，`TrafficLightBead` 不再是一个开关，而是红绿灯唯一的外观：
+
+- 删除 `set_reference_bead` / `reference_bead` 与 `REFERENCE_BEAD` 静态量
+- 删除 demo 的 `Message::ToggleMaterialVariant` 按钮与 `LIQUID_GLASS_TRAFFIC_LIGHT_MATERIAL` 启动覆盖
+- `traffic_light_material` 恒定返回 `GlassVariant::TrafficLightBead`
+
+默认启动实测盘心 `(255,92,81) / (255,196,35) / (43,209,61)`，与 6.10 的预测一致。
+
+### 7.2 顺带修好一个我自己造成的破损
+
+`window_demo` 的测试目标自 `traffic_light_material` 增加 `is_dark` / `focus` 参数后
+**一直编译不过**，而 `cargo test --workspace` 不会编译 example 的 `#[cfg(test)]` 模块，
+所以前几轮"全绿"的报告是不完整的。**正确的检查命令是
+`cargo test --workspace --all-targets`**（shell 94 项、liquid-rs 26 项）。已修复。
+
+### 7.3 已删除：两个从未被构造的变体 + reference backdrop
+
+`GlassVariant::TrafficLight` 与 `TrafficLightPhysical` 在仓库任何位置都**不再被构造**
+（grep 全仓确认）。因此：
+
+| 删除项 | 理由 |
+|---|---|
+| `GlassVariant::TrafficLight` / `TrafficLightPhysical` | 从未被构造 |
+| `FEATURE_TRAFFIC_LIGHT_REFERENCE` + `TrafficLightPhysical` 的 flag 赋值 | 无来源后恒假 |
+| `usesTrafficLightReferenceBackdrop` / `trafficLightReferenceBackdrop` / `TRAFFIC_LIGHT_REFERENCE_BACKDROP` | 引用了恒假的 flag |
+| 上述 6 个调用点 | 取"非 reference"那一支 |
+
+**可证明性**：bead 分支提前返回，因此到达 `fs_main` 尾部的节点只有 `Regular` / `Clear`，
+而这两个变体都不置 `FEATURE_TRAFFIC_LIGHT*` —— 被删的全是恒假分支。
+
+**验证（比特级）**：
+
+| 区域 | 删除前 | 删除后 |
+|---|---|---|
+| 常规 glass（不含红绿灯） | `18bf0179f2e0…` | `18bf0179f2e0…` |
+| bead 区 | `8498f8086fca…` | `8498f8086fca…` |
+
+方法上有个坑值得记下：`cargo update` 从**远端**取，所以必须先 `git push` 再更新锁文件。
+我第一次漏了 push，锁里仍是上一个提交，那次"比特一致"其实没有覆盖删除。改用
+`grep -o 'branch=main#[0-9a-f]*'` 核对锁里真实的完整 rev 后才重做。
+
+### 7.4 待你拍板：面板上那批 physical 旋钮怎么处理
+
+查证发现，**面板 "Physical material tuning" 里的多数旋钮对 bead 是失效的**——它们写进
+`material.traffic_light` / `core_light` / `rim_profile`，而这些只被已删的死分支读取。
+更关键的是，其中若干在 bead 分支里有**被硬编码的同名常量**：
+
+| 面板旋钮 | 默认 | bead 分支里的硬编码 |
+|---|---|---|
+| `core_lift` | 0.25 | 与 `bead_saturation_lift` **完全重复**（bead 用的是后者，而面板不暴露后者） |
+| `vertical_power` | 1.35 | `pow(vertical, 1.35)` 硬编码 |
+| `horizontal_power` | 0.25 | `pow(max(1-nx²,0), 0.25)` 硬编码 |
+| `lateral_power` | 2.0 | `pow(abs(nx), 2.0)` 硬编码 |
+| `axial_glow` | 0.46 | `* 0.42` 硬编码（数值不同） |
+| `core_power` | 4.0 | 由 `bead_b1..b3 = 0` 表达为 `(1-t)^4` |
+
+也就是说 bead 真正的旋钮（`bead_*` 那一组）**根本不在面板上**，而面板上的这批对 bead 无效。
+三条路线：**(a)** 删掉 physical 旋钮，并把 `bead_*` 那组接进面板（推荐）；
+**(b)** 删掉纯 physical 的（substrate/angular/light_angle/body_thickness/side_edge_*），
+把有硬编码孪生的那几个改为驱动 bead；**(c)** 全删，bead 常量就保持硬编码，不做面板。
