@@ -232,6 +232,8 @@ impl DemoState {
 
 fn boot() -> (DemoState, Task<Message>) {
     let state = DemoState::default();
+    // The widget must not draw its own sphere: the compositor's bead supplies it.
+    window_controls::set_glass_passthrough(true);
     iced_backend::set_surface(DemoSurface::WindowDemo);
     let scheme = if state.is_dark() {
         UiColorScheme::Dark
@@ -463,12 +465,17 @@ fn view(state: &DemoState) -> AppElement<'_> {
 // =========================================================================
 
 fn view_traffic_lights<'a>(state: &'a DemoState) -> AppElement<'a> {
-    window_controls::view_traffic_lights_all_inclusive(
+    // The GPU bead draws the sphere, so the widget contributes only the Apple
+    // vector glyphs -- and a glyph layer has to be composited *above* the glass
+    // or the glass covers it. This demo used to place the group straight into
+    // the header row, which is why its controls showed no symbols at all.
+    liquid_glass_ui::GlassOverlay::new(window_controls::view_traffic_lights_all_inclusive(
         &state.traffic_lights,
         state.window_focused,
         state.is_dark(),
         Message::TrafficLights,
-    )
+    ))
+    .into()
 }
 
 fn view_theme_toggle(state: &DemoState) -> AppElement<'_> {
