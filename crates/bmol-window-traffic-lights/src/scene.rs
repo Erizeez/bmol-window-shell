@@ -169,6 +169,13 @@ pub fn push_traffic_light_group(
         let values = frame.interaction(id);
         let [bx, by, bw, bh] = sphere_bounds(x, y, size, gap, index, values.scale);
         let bounds = Rect::new(bx, by, bw, bh);
+        // The press changes the sphere's drawn radius, not the area of backdrop
+        // the material samples. The node's backdrop region starts as the shape
+        // bounds, so letting it follow the scale made a blurred rectangle grow
+        // and shrink behind the control with the spring; pin it to the resting
+        // footprint instead.
+        let [rx, ry, rw, rh] = sphere_bounds(x, y, size, gap, index, 1.0);
+        let resting_bounds = Rect::new(rx, ry, rw, rh);
 
         let interaction = interactions
             .iter()
@@ -194,6 +201,7 @@ pub fn push_traffic_light_group(
             .shape(GlassShape::Circle)
             .material(material)
             .interaction(interaction);
+        node.backdrop.bounds = resting_bounds;
         node.z_index = 40;
         scene.push(node);
     }
@@ -391,6 +399,41 @@ mod tests {
                 .abs()
                 < 1e-6);
         }
+        reset_groups();
+    }
+
+    #[test]
+    fn the_backdrop_region_does_not_follow_the_press_scale() {
+        reset_groups();
+        let mut state = TrafficLightsState::new();
+        state.on_press_start(0);
+        for _ in 0..30 {
+            state.advance(1.0 / 60.0);
+        }
+        publish_group(0, &state);
+
+        let mut scene = GlassScene::default();
+        push_traffic_light_group(
+            &mut scene,
+            &WINDOW_CONTROL_GROUPS[0].1,
+            10.0,
+            18.0,
+            14.0,
+            9.0,
+            false,
+            false,
+            false,
+            WindowControlTuning::default(),
+            &[],
+        );
+
+        let pressed = &scene.nodes()[0];
+        assert!(pressed.bounds.width > 14.0, "the sphere itself must grow");
+        assert!(
+            (pressed.backdrop.bounds.width - 14.0).abs() < 1e-4,
+            "the sampled backdrop must stay at the resting size, got {}",
+            pressed.backdrop.bounds.width
+        );
         reset_groups();
     }
 
