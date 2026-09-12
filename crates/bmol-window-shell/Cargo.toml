@@ -35,7 +35,8 @@ squircle-rs = { git = "https://github.com/Erizeez/squircle-rs", tag = "v0.1.2", 
 # Shared widget layer. The traffic-light widget, its overlay routing, and the
 # renderer trait that layer lives on are owned there, because applications need
 # the same widgets the shell does.
-liquid-glass-ui = { git = "https://github.com/Erizeez/bmol-glass-ui", tag = "v0.1.5", optional = true }
+liquid-glass-ui = { git = "https://github.com/Erizeez/bmol-glass-ui", tag = "v0.1.6",
+    features = ["iced-wgpu"], optional = true }
 
 [dev-dependencies]
 bytemuck = { version = "1.24.0", features = ["derive"] }

@@ -274,11 +274,11 @@ mod tests {
         let config = WindowChromeConfig::separate(32.0);
         let controller = WindowShellController::new(config, false);
 
-        // `iced::Renderer` is the bare `iced_wgpu` renderer here, which has no
-        // Liquid Glass compositor and therefore no overlay pass. The traffic-light
-        // path needs one, so this test uses the null renderer, which implements
-        // the trait and is what the widget layer's own tests use.
-        let _element: Element<'_, (), iced::Theme, ()> = controller
+        // `iced::Renderer` is the bare `iced_wgpu` renderer here: no Liquid Glass
+        // compositor, so its overlay pass is the normal one. The traffic-light
+        // path still has to name a renderer the widget layer knows about, which
+        // is what the `iced-wgpu` feature provides.
+        let _element: Element<'_, (), iced::Theme, iced::Renderer> = controller
             .scaffold(space())
             .title("Test Window")
             .on_drag(())
