@@ -158,6 +158,11 @@ enum TuningParameter {
     EdgeSideAngle,
     RefractionStrength,
     FresnelStrength,
+    HoverGain,
+    PressGain,
+    PressLift,
+    UniformLight,
+    ThinLightGain,
 }
 
 #[derive(Debug, Clone)]
@@ -341,6 +346,11 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
                     state.tuning.refraction_strength = value;
                 }
                 TuningParameter::FresnelStrength => state.tuning.fresnel_strength = value,
+                TuningParameter::HoverGain => state.tuning.hover_gain = value,
+                TuningParameter::PressGain => state.tuning.press_gain = value,
+                TuningParameter::PressLift => state.tuning.press_lift = value,
+                TuningParameter::UniformLight => state.tuning.uniform_light = value,
+                TuningParameter::ThinLightGain => state.tuning.thin_light_gain = value,
             }
             iced_backend::set_window_control_tuning(state.tuning);
         }
@@ -504,7 +514,12 @@ body_thickness = {body_thickness:.4}\n\
 edge_side_bias = {edge_side_bias:.4}\n\
 edge_side_angle = {edge_side_angle:.2}\n\
 refraction_strength = {refraction_strength:.4}\n\
-fresnel_strength = {fresnel_strength:.4}\n",
+fresnel_strength = {fresnel_strength:.4}\n\
+hover_gain = {hover_gain:.4}\n\
+press_gain = {press_gain:.4}\n\
+press_lift = {press_lift:.4}\n\
+uniform_light = {uniform_light:.4}\n\
+thin_light_gain = {thin_light_gain:.4}\n",
         edited = state.document_edited,
         blur_radius = tuning.blur_radius,
         internal_scattering = tuning.internal_scattering,
@@ -522,6 +537,11 @@ fresnel_strength = {fresnel_strength:.4}\n",
         edge_side_angle = tuning.edge_side_angle,
         refraction_strength = tuning.refraction_strength,
         fresnel_strength = tuning.fresnel_strength,
+        hover_gain = tuning.hover_gain,
+        press_gain = tuning.press_gain,
+        press_lift = tuning.press_lift,
+        uniform_light = tuning.uniform_light,
+        thin_light_gain = tuning.thin_light_gain,
     )
 }
 
@@ -663,6 +683,46 @@ fn tuning_panel(tuning: WindowControlTuning) -> AppElement<'static> {
             0.0..=1.0,
             0.01,
             |value| Message::TuningChanged { parameter: TuningParameter::FresnelStrength, value },
+        ),
+        components::setting_slider_with_step(
+            "Hover gain (whole control)",
+            format!("{:.0}%", tuning.hover_gain * 100.0),
+            tuning.hover_gain,
+            0.0..=1.0,
+            0.01,
+            |value| Message::TuningChanged { parameter: TuningParameter::HoverGain, value },
+        ),
+        components::setting_slider_with_step(
+            "Press gain (whole control)",
+            format!("{:.0}%", tuning.press_gain * 100.0),
+            tuning.press_gain,
+            0.0..=1.0,
+            0.01,
+            |value| Message::TuningChanged { parameter: TuningParameter::PressGain, value },
+        ),
+        components::setting_slider_with_step(
+            "Press tint lift",
+            format!("{:.0}%", tuning.press_lift * 100.0),
+            tuning.press_lift,
+            0.0..=1.0,
+            0.01,
+            |value| Message::TuningChanged { parameter: TuningParameter::PressLift, value },
+        ),
+        components::setting_slider_with_step(
+            "Centre light (uniform)",
+            format!("{:.3}", tuning.uniform_light),
+            tuning.uniform_light,
+            0.0..=0.60,
+            0.005,
+            |value| Message::TuningChanged { parameter: TuningParameter::UniformLight, value },
+        ),
+        components::setting_slider_with_step(
+            "Centre light (lower)",
+            format!("{:.3}", tuning.thin_light_gain),
+            tuning.thin_light_gain,
+            0.0..=0.60,
+            0.005,
+            |value| Message::TuningChanged { parameter: TuningParameter::ThinLightGain, value },
         ),
     ]);
 

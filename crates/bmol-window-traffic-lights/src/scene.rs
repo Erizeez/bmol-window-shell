@@ -5,8 +5,8 @@
 //! spheres and the Iced glyph layer are always driven by the same numbers.
 
 use liquid_glass_scene::{
-    Color, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
-    GlassVariant, Rect, TrafficLightStyle,
+    Color, CoreLight, GlassId, GlassInteraction, GlassMaterial, GlassNode, GlassScene, GlassShape,
+    GlassVariant, InteractionResponse, Rect, TrafficLightStyle,
 };
 
 use crate::interaction::{
@@ -74,6 +74,17 @@ pub fn traffic_light_material(
         edge_side_angle: fields.style.edge_side_angle,
     };
     material.tint = Color::rgba(fields.tint[0], fields.tint[1], fields.tint[2], fields.tint[3]);
+    // Pointer engagement and centre light travel through the material, so a
+    // playground can tune them without the shader knowing about tuning structs.
+    material.interaction = InteractionResponse {
+        hover_gain: fields.interaction[0],
+        press_gain: fields.interaction[1],
+        press_lift: fields.interaction[2],
+    };
+    material.core_light = CoreLight {
+        uniform_light: fields.core_light[0],
+        thin_light_gain: fields.core_light[1],
+    };
     material.refraction.strength = fields.refraction_strength;
     material.fresnel.strength = fields.fresnel_strength;
     material.whiteness = 0.0;

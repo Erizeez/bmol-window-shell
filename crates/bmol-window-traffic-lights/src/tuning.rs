@@ -27,6 +27,16 @@ pub struct WindowControlTuning {
     pub edge_side_angle: f32,
     pub refraction_strength: f32,
     pub fresnel_strength: f32,
+    /// Whole-control brightening while the pointer is over the control.
+    pub hover_gain: f32,
+    /// Whole-control brightening while the control is held.
+    pub press_gain: f32,
+    /// Tint-hued brightness lift added while the control is held.
+    pub press_lift: f32,
+    /// Uniform incident field of the spherical centre light.
+    pub uniform_light: f32,
+    /// Extra centre-light release toward the thinner lower hemisphere.
+    pub thin_light_gain: f32,
 }
 
 impl WindowControlTuning {
@@ -50,6 +60,11 @@ impl WindowControlTuning {
             edge_side_angle: 23.0,
             refraction_strength: 0.5,
             fresnel_strength: 0.0,
+            hover_gain: 0.22,
+            press_gain: 0.12,
+            press_lift: 0.06,
+            uniform_light: 0.045,
+            thin_light_gain: 0.055,
         }
     }
 
@@ -78,6 +93,11 @@ impl WindowControlTuning {
                 edge_side_angle: 23.0,
                 refraction_strength: 0.0,
                 fresnel_strength: 0.39,
+                hover_gain: 0.22,
+                press_gain: 0.12,
+                press_lift: 0.06,
+                uniform_light: 0.045,
+                thin_light_gain: 0.055,
             }
         } else {
             Self::new()
@@ -105,6 +125,8 @@ impl WindowControlTuning {
             blur_radius: self.blur_radius,
             refraction_strength: self.refraction_strength,
             fresnel_strength: self.fresnel_strength,
+            interaction: [self.hover_gain, self.press_gain, self.press_lift],
+            core_light: [self.uniform_light, self.thin_light_gain],
             style: TrafficLightStyleFields {
                 substrate_coverage: self.substrate_coverage,
                 lower_substrate_coverage: self.lower_substrate_coverage,
@@ -142,6 +164,11 @@ impl WindowControlTuning {
             edge_side_angle: self.edge_side_angle.clamp(10.0, 80.0),
             refraction_strength: self.refraction_strength.clamp(0.0, 1.0),
             fresnel_strength: self.fresnel_strength.clamp(0.0, 1.0),
+            hover_gain: self.hover_gain.clamp(0.0, 1.0),
+            press_gain: self.press_gain.clamp(0.0, 1.0),
+            press_lift: self.press_lift.clamp(0.0, 1.0),
+            uniform_light: self.uniform_light.clamp(0.0, 1.0),
+            thin_light_gain: self.thin_light_gain.clamp(0.0, 1.0),
         }
     }
 }
@@ -180,6 +207,10 @@ pub struct TrafficLightMaterialFields {
     pub blur_radius: f32,
     pub refraction_strength: f32,
     pub fresnel_strength: f32,
+    /// Pointer-engagement gains, in the order hover / press / press lift.
+    pub interaction: [f32; 3],
+    /// Centre-light strengths, in the order uniform / thin.
+    pub core_light: [f32; 2],
     pub style: TrafficLightStyleFields,
 }
 
@@ -222,6 +253,8 @@ mod tests {
         assert!(revealed.tint[3] > dark_inactive.tint[3]);
         assert!(revealed.tint[3] <= active.tint[3] + f32::EPSILON);
         assert!(revealed.opacity > dark_inactive.opacity);
+        assert_eq!(revealed.interaction, [0.22, 0.12, 0.06]);
+        assert_eq!(revealed.core_light, [0.045, 0.055]);
         assert_eq!(revealed.style.substrate_coverage, tuning.substrate_coverage);
         assert_eq!(revealed.blur_radius, tuning.blur_radius);
         assert_eq!(revealed.refraction_strength, tuning.refraction_strength);
@@ -247,6 +280,11 @@ mod tests {
             edge_side_angle: 0.0,
             refraction_strength: 3.0,
             fresnel_strength: -1.0,
+            hover_gain: 9.0,
+            press_gain: -1.0,
+            press_lift: 4.0,
+            uniform_light: 5.0,
+            thin_light_gain: -2.0,
         }
         .clamped();
 
@@ -256,5 +294,10 @@ mod tests {
         assert_eq!(wild.side_edge_width, 0.25);
         assert_eq!(wild.edge_side_angle, 10.0);
         assert_eq!(wild.fresnel_strength, 0.0);
+        assert_eq!(wild.hover_gain, 1.0);
+        assert_eq!(wild.press_gain, 0.0);
+        assert_eq!(wild.press_lift, 1.0);
+        assert_eq!(wild.uniform_light, 1.0);
+        assert_eq!(wild.thin_light_gain, 0.0);
     }
 }
