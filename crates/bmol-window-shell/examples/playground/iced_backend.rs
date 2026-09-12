@@ -869,6 +869,13 @@ impl graphics::Compositor for Compositor {
             self.liquid.resize(size).map_err(|_| graphics::compositor::SurfaceError::Other)?;
         }
         self.liquid.set_accessibility(active_accessibility());
+        // Node geometry is already physical, so this scales no shape. It lets
+        // point-authored material responses -- the reference bead's rim spans --
+        // resolve to physical pixels instead of being applied as if the surface
+        // were 1x, which made the bead's rims about 29% too narrow on Retina.
+        let mut liquid_options = self.liquid.render_options();
+        liquid_options.scale_factor = viewport.scale_factor().max(1.0);
+        self.liquid.set_render_options(liquid_options);
         if self.iced_source_size != size {
             self.iced_source = Some(self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("liquid-glass Iced source texture"),
