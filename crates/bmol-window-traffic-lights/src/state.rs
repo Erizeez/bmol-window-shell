@@ -35,12 +35,13 @@ pub const PRESS_SCALE_REST: f32 = 1.0;
 /// a slight bounce that lands a hair above it (see [`PRESS_SPRING_BOUNCE`]).
 pub const PRESS_SCALE_PEAK: f32 = 1.18;
 /// Perceptual duration of the press spring, in seconds.
-pub const PRESS_SPRING_DURATION: f32 = 0.20;
+pub const PRESS_SPRING_DURATION: f32 = 0.26;
 /// Perceptual bounce of the press spring (`0.0` = critically damped).
 ///
-/// `0.30` maps to `ζ = 0.70`, which overshoots the target by ~4.6% of the
-/// travel: a visible but restrained bounce that peaks around `1.188`.
-pub const PRESS_SPRING_BOUNCE: f32 = 0.30;
+/// `0.55` maps to `ζ = 0.45`, which overshoots the target by ~20% of the
+/// travel: a clearly elastic settle rather than a stiff ease, peaking around
+/// `1.22` and dipping to roughly `0.96` when released.
+pub const PRESS_SPRING_BOUNCE: f32 = 0.55;
 /// Time constant used while revealing the group glyphs.
 pub const INTERACTION_ENTER_ANIMATION_TIME_CONSTANT: f32 = 0.08;
 /// Time constant used while hiding the group glyphs.
@@ -373,14 +374,19 @@ mod tests {
 
         // The spring target is the peak; the bounce lands just above it.
         assert!(peak >= PRESS_SCALE_PEAK, "peak {peak} should reach the target");
-        assert!(peak <= 1.20, "peak {peak} should stay close to the intent");
+        // The spring is meant to be elastic: it must overshoot the target
+        // visibly, without the wide bounce the previous preset produced.
+        assert!(peak > 1.20, "peak {peak} should overshoot for elasticity");
+        assert!(peak <= 1.24, "peak {peak} should stay close to the intent");
         assert!((state.press_scale(0) - PRESS_SCALE_PEAK).abs() < 1e-3);
 
         state.on_press_end(0);
         let (_, trough) = settle(&mut state, 0, 600);
 
         assert!((state.press_scale(0) - PRESS_SCALE_REST).abs() < 1e-3);
-        assert!(trough > 0.985, "release must not visibly undershoot: {trough}");
+        // A bouncy release is expected to undershoot before settling.
+        assert!(trough > 0.94, "release undershoot is too deep: {trough}");
+        assert!(trough < 1.0, "release should visibly spring back: {trough}");
         assert_eq!(state.armed, None);
     }
 
